@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>JumpLab Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root{
+  --bg:#080810;--s1:#0f0f1e;--s2:#161628;--s3:#1e1e38;--bd:#28284a;
+  --acc:#ff6a00;--acc2:#ffaa00;--blue:#00cfff;--green:#00e676;
+  --red:#ff3355;--purple:#b06eff;--text:#f0f0ff;--muted:#606088;
+  --fh:'Barlow Condensed',sans-serif;--fm:'Space Mono',monospace;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--fm);overflow:hidden;}
+#app{height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+.screen{display:none;flex-direction:column;height:100%;overflow:hidden;}
+.screen.active{display:flex;}
+
+/* SQUAD BAR - always visible during testing */
+.squad-bar{
+  display:flex;align-items:center;gap:0;
+  overflow-x:auto;scrollbar-width:none;
+  background:var(--s1);border-bottom:2px solid var(--bd);
+  flex-shrink:0;
+}
+.squad-bar::-webkit-scrollbar{display:none;}
+.squad-chip{
+  flex-shrink:0;display:flex;flex-direction:column;align-items:center;
+  padding:8px 12px;cursor:pointer;border-right:1px solid var(--bd);
+  min-width:64px;transition:background .15s;position:relative;
+  border-bottom:3px solid transparent;
+}
+.squad-chip.active{background:var(--s2);border-bottom-color:var(--acc);}
+.squad-chip.done{border-bottom-color:var(--green);}
+.squad-chip:active{background:var(--s3);}
+.chip-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:14px;font-weight:800;margin-bottom:3px;}
+.chip-name{font-size:8px;color:var(--muted);letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56px;text-align:center;}
+.chip-best{font-family:var(--fh);font-size:13px;font-weight:700;color:var(--acc);line-height:1;}
+.squad-add{flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 14px;cursor:pointer;color:var(--acc);font-size:22px;border-right:1px solid var(--bd);}
+
+/* TOP BAR */
+.tbar{display:flex;align-items:center;gap:10px;padding:env(safe-area-inset-top,10px) 14px 10px;background:rgba(8,8,16,.97);border-bottom:1px solid var(--bd);flex-shrink:0;}
+.tbar-logo{font-family:var(--fh);font-size:20px;font-weight:800;letter-spacing:3px;color:var(--acc);}
+.tbar-logo span{color:var(--blue);}
+.tbar-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.tbar-btn{background:var(--s2);border:1px solid var(--bd);color:var(--text);border-radius:6px;padding:6px 10px;font-family:var(--fm);font-size:9px;cursor:pointer;letter-spacing:1px;white-space:nowrap;}
+.tbar-btn:active{background:var(--s3);}
+
+/* CAMERA WRAP */
+.cam-wrap{position:relative;background:#000;flex-shrink:0;overflow:hidden;}
+.cam-wrap video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1);}
+.cam-wrap canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);}
+.br{position:absolute;z-index:5;width:20px;height:20px;pointer-events:none;}
+.br-tl{top:8px;left:8px;border-top:2px solid var(--acc);border-left:2px solid var(--acc);}
+.br-tr{top:8px;right:8px;border-top:2px solid var(--acc);border-right:2px solid var(--acc);}
+.br-bl{bottom:8px;left:8px;border-bottom:2px solid var(--acc);border-left:2px solid var(--acc);}
+.br-br{bottom:8px;right:8px;border-bottom:2px solid var(--acc);border-right:2px solid var(--acc);}
+
+/* HUD overlay */
+.cam-hud{position:absolute;top:0;left:0;right:0;z-index:6;display:flex;justify-content:space-between;padding:7px 9px;pointer-events:none;}
+.hpill{background:rgba(8,8,16,.85);border:1px solid var(--bd);border-radius:20px;padding:3px 8px;font-size:8px;letter-spacing:1.5px;display:flex;align-items:center;gap:4px;}
+.hdot{width:6px;height:6px;border-radius:50%;background:var(--muted);}
+.hdot.ok{background:var(--green);box-shadow:0 0 6px var(--green);}
+.hdot.live{background:var(--red);box-shadow:0 0 6px var(--red);animation:blink 0.7s infinite;}
+.hdot.warn{background:var(--acc2);box-shadow:0 0 6px var(--acc2);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* PHASE OVERLAY */
+.phase-ov{position:absolute;inset:0;z-index:18;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(8,8,16,.82);display:none;}
+.phase-num{font-family:var(--fh);font-size:110px;font-weight:800;line-height:1;text-shadow:0 0 40px currentColor;}
+.phase-lbl{font-size:12px;color:rgba(255,255,255,.6);letter-spacing:3px;text-transform:uppercase;margin-top:4px;}
+
+/* RESULT FLASH */
+.result-ov{position:absolute;inset:0;z-index:20;background:rgba(8,8,16,.92);backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:center;display:none;}
+.result-big{font-family:var(--fh);font-size:96px;font-weight:800;color:var(--acc);text-shadow:0 0 50px rgba(255,106,0,.5);line-height:1;}
+.result-unit{font-size:12px;letter-spacing:4px;color:var(--blue);margin-top:-6px;}
+.result-sub{font-size:10px;color:var(--muted);letter-spacing:1px;margin-top:8px;text-align:center;padding:0 16px;}
+.result-btns{display:flex;gap:10px;margin-top:16px;}
+
+/* LOADING */
+.load-ov{position:absolute;inset:0;z-index:22;background:rgba(8,8,16,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;}
+.spinner{width:40px;height:40px;border:3px solid var(--bd);border-top-color:var(--acc);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.load-txt{font-size:10px;color:var(--acc);letter-spacing:2px;}
+
+/* FLASH WHITE */
+.flash-ov{position:absolute;inset:0;z-index:15;background:rgba(255,255,255,.7);pointer-events:none;opacity:0;}
+
+/* LIVE ANGLES HUD */
+.angles-hud{position:absolute;bottom:7px;left:0;right:0;z-index:6;display:flex;gap:5px;justify-content:center;flex-wrap:wrap;padding:0 7px;}
+.achip{background:rgba(8,8,16,.88);border:1px solid var(--bd);border-radius:4px;padding:3px 7px;display:flex;flex-direction:column;align-items:center;}
+.achip-lbl{font-size:7px;color:var(--muted);letter-spacing:1px;}
+.achip-val{font-family:var(--fh);font-size:16px;font-weight:700;line-height:1;}
+
+/* BOTTOM PANEL */
+.bottom-panel{padding:10px 12px;background:var(--bg);flex-shrink:0;}
+
+/* MODE CHIPS */
+.mode-row{display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none;}
+.mode-row::-webkit-scrollbar{display:none;}
+.mode-chip{flex-shrink:0;background:var(--s2);border:1px solid var(--bd);border-radius:20px;color:var(--muted);font-family:var(--fm);font-size:9px;letter-spacing:1px;padding:6px 12px;cursor:pointer;transition:all .15s;-webkit-user-select:none;}
+.mode-chip.on{background:rgba(255,106,0,.12);border-color:var(--acc);color:var(--acc);}
+
+/* CONTROLS */
+.controls{display:flex;gap:8px;align-items:center;}
+.rec-btn{width:62px;height:62px;border-radius:50%;border:3px solid var(--acc);background:rgba(255,106,0,.08);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:24px;transition:all .2s;flex-shrink:0;-webkit-user-select:none;}
+.rec-btn:active{transform:scale(.93);}
+.rec-btn.armed{border-color:var(--acc2);background:rgba(255,170,0,.12);animation:armPulse .8s ease-in-out infinite;}
+.rec-btn.live{border-color:var(--red);background:rgba(255,51,85,.12);animation:livePulse .6s ease-in-out infinite;}
+@keyframes armPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,170,0,.4)}50%{box-shadow:0 0 0 14px rgba(255,170,0,0)}}
+@keyframes livePulse{0%,100%{box-shadow:0 0 0 0 rgba(255,51,85,.5)}50%{box-shadow:0 0 0 18px rgba(255,51,85,0)}}
+.ctrl-right{flex:1;display:flex;flex-direction:column;gap:6px;}
+.status-txt{font-size:10px;color:var(--muted);letter-spacing:1px;min-height:16px;}
+
+/* SESSION MINI */
+.session-row{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;align-items:center;}
+.session-row::-webkit-scrollbar{display:none;}
+.sitem{flex-shrink:0;background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:5px 8px;text-align:center;min-width:48px;}
+.sitem.best{border-color:var(--acc);}
+.sitem-n{font-size:7px;color:var(--muted);}
+.sitem-v{font-family:var(--fh);font-size:17px;font-weight:700;}
+
+/* MANUAL ENTRY */
+.manual-row{display:flex;gap:7px;align-items:flex-end;}
+.ig{display:flex;flex-direction:column;gap:3px;}
+.ig label{font-size:7px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;}
+.ig input{background:var(--s2);border:1px solid var(--bd);color:var(--text);font-family:var(--fm);font-size:13px;padding:8px 10px;border-radius:6px;outline:none;width:100%;}
+.ig input:focus{border-color:var(--acc);}
+
+/* BUTTONS */
+.btn{border:none;cursor:pointer;font-family:var(--fm);font-size:10px;letter-spacing:1px;text-transform:uppercase;border-radius:6px;padding:9px 14px;display:inline-flex;align-items:center;gap:5px;transition:all .12s;-webkit-user-select:none;white-space:nowrap;}
+.btn:active{transform:scale(.95);}
+.btn-acc{background:var(--acc);color:#000;font-weight:700;}
+.btn-ghost{background:var(--s2);border:1px solid var(--bd);color:var(--muted);}
+.btn-ghost:hover{border-color:var(--acc);color:var(--acc);}
+.btn-blue{background:rgba(0,207,255,.1);border:1px solid var(--blue);color:var(--blue);}
+.btn-green{background:rgba(0,230,118,.1);border:1px solid var(--green);color:var(--green);}
+.btn-block{width:100%;justify-content:center;}
+.btn-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+
+/* OVERLAY (full screen) */
+.ov{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.97);display:none;flex-direction:column;overflow:hidden;}
+.ov.open{display:flex;}
+.ov-hdr{display:flex;align-items:center;gap:10px;padding:14px 14px;border-bottom:1px solid var(--bd);flex-shrink:0;}
+.ov-title{font-family:var(--fh);font-size:20px;font-weight:800;letter-spacing:2px;color:var(--acc);}
+.ov-close{margin-left:auto;width:30px;height:30px;border:1px solid var(--bd);background:var(--s2);color:var(--text);border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
+.ov-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;}
+
+/* STATS overlay */
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px;}
+.stat-box{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:11px 12px;}
+.stat-lbl{font-size:8px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;}
+.stat-val{font-family:var(--fh);font-size:34px;font-weight:800;line-height:1;}
+.stat-unit{font-size:9px;color:var(--muted);margin-top:1px;}
+.stat-delta{font-size:10px;margin-top:4px;}
+.up{color:var(--green);}
+.dn{color:var(--red);}
+.neu{color:var(--muted);}
+
+/* CHART CANVAS */
+.chart-box{background:var(--s1);border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:10px;}
+
+/* TABLE */
+.tbl{width:100%;border-collapse:collapse;font-size:10px;}
+.tbl th{font-size:8px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;padding:6px 8px;text-align:left;border-bottom:1px solid var(--bd);}
+.tbl td{padding:8px;border-bottom:1px solid var(--s3);}
+.tbl tr:hover td{background:var(--s2);}
+.tbl tr:last-child td{border-bottom:none;}
+.best-row td{color:var(--acc);}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;right:14px;z-index:999;background:var(--s2);border:1px solid var(--acc);border-radius:8px;padding:9px 14px;font-size:10px;letter-spacing:1px;color:var(--acc);opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;max-width:280px;}
+.toast.show{opacity:1;transform:translateY(0);}
+
+/* SCROLLBAR */
+.ov-body::-webkit-scrollbar{width:2px;}
+.ov-body::-webkit-scrollbar-thumb{background:var(--bd);}
+
+/* SETUP SCREEN */
+.setup-content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px;}
+.setup-logo{font-family:var(--fh);font-size:32px;font-weight:800;letter-spacing:4px;text-align:center;color:var(--acc);margin-bottom:2px;}
+.setup-logo span{color:var(--blue);}
+.setup-sub{font-size:9px;color:var(--muted);letter-spacing:2px;text-align:center;text-transform:uppercase;margin-bottom:24px;}
+.setup-card{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:18px;margin-bottom:12px;}
+.setup-card-title{font-family:var(--fh);font-size:14px;font-weight:700;letter-spacing:2px;color:var(--blue);margin-bottom:12px;}
+
+/* CAMERA SETUP GUIDE */
+.setup-guide{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.guide-item{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;text-align:center;}
+.guide-icon{font-size:28px;margin-bottom:6px;}
+.guide-title{font-family:var(--fh);font-size:13px;font-weight:700;margin-bottom:3px;}
+.guide-desc{font-size:10px;color:var(--muted);line-height:1.6;}
+.guide-item.wrong{border-color:var(--red);opacity:.6;}
+.guide-item.right{border-color:var(--green);}
+@media(max-width:400px){.setup-guide{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ═══════════════════════════════════════
+  SETUP SCREEN
+═══════════════════════════════════════ -->
+<div class="screen active" id="setupScreen">
+  <div class="tbar">
+    <div class="tbar-logo">JUMP<span>LAB</span></div>
+    <div class="tbar-right">
+      <button class="tbar-btn" onclick="openOv('addAthleteOv')">+ Sporcu</button>
+      <button class="tbar-btn" onclick="goTest()" id="startTestBtn" style="background:var(--acc);color:#000;border-color:var(--acc);">Teste Basla &#9654;</button>
+    </div>
+  </div>
+  <div class="setup-content">
+    <div class="setup-logo">JUMP<span>LAB</span></div>
+    <div class="setup-sub">Dikey Sicrama Analiz Sistemi</div>
+
+    <!-- Camera setup guide -->
+    <div class="setup-card">
+      <div class="setup-card-title">&#128247; KAMERA KURULUM KILAVUZU</div>
+      <div class="setup-guide">
+        <div class="guide-item right">
+          <div class="guide-icon">&#9989;</div>
+          <div class="guide-title">Dogru: Yan Profil</div>
+          <div class="guide-desc">Telefonu yere koy, sporcu tam yana baksın. Mesafe: 3-4m. Diz ve kalca eklemleri net gorunsun.</div>
+        </div>
+        <div class="guide-item wrong">
+          <div class="guide-icon">&#10060;</div>
+          <div class="guide-title">Yanlis: One Bakis</div>
+          <div class="guide-desc">One bakis acisi diz acisini dogru olcemez. Yanlamasina durmak zorunludur.</div>
+        </div>
+        <div class="guide-item right">
+          <div class="guide-icon">&#9989;</div>
+          <div class="guide-title">Dogru: Yukseklik</div>
+          <div class="guide-desc">Kamera diz hizasinda veya biraz asagida. Tripod ideal, yer de olur.</div>
+        </div>
+        <div class="guide-item right">
+          <div class="guide-icon">&#9989;</div>
+          <div class="guide-title">Dogru: Cerceve</div>
+          <div class="guide-desc">Sporcu tam boy gorunsun. Basın yukarida, ayaklari asagida olmali.</div>
+        </div>
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px;font-size:10px;color:var(--muted);line-height:1.9;">
+        <strong style="color:var(--acc2);">CMJ (Countermovement Jump):</strong> Dogal durustan sıcrama. En cok kullanilan test.<br>
+        <strong style="color:var(--acc2);">Squat Jump:</strong> Diz 90 derece buke, 2 saniye tut, kollar belde, sonra sicra.<br>
+        <strong style="color:var(--acc2);">Drop Jump:</strong> Yuksekten in, hemen sicra. RSI hesaplanir.<br>
+        <strong style="color:var(--acc2);">Bilateral / Unilateral:</strong> Cift veya tek bacak ile yapilabilir.
+      </div>
+    </div>
+
+    <!-- Athletes -->
+    <div class="setup-card">
+      <div class="setup-card-title">&#128101; SPORCULAR (<span id="athleteCountSetup">0</span>)</div>
+      <div id="athleteSetupList"><div style="color:var(--muted);font-size:11px;text-align:center;padding:16px;">Henuz sporcu eklenmedi. "Sporcu Ekle" butonuna bas.</div></div>
+      <div style="margin-top:10px;">
+        <button class="btn btn-acc btn-block" onclick="openOv('addAthleteOv')">+ Yeni Sporcu Ekle</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+  TEST SCREEN
+═══════════════════════════════════════ -->
+<div class="screen" id="testScreen">
+  <div class="tbar">
+    <div class="tbar-logo">JUMP<span>LAB</span></div>
+    <div class="tbar-right">
+      <button class="tbar-btn" onclick="openOv('statsOv')">&#128202; İstatistik</button>
+      <button class="tbar-btn" onclick="goSetup()">&#8592; Setup</button>
+    </div>
+  </div>
+
+  <!-- SQUAD BAR -->
+  <div class="squad-bar" id="squadBar"></div>
+
+  <!-- CAMERA -->
+  <div class="cam-wrap" id="camWrap">
+    <video id="camVideo" playsinline autoplay muted></video>
+    <canvas id="camCanvas"></canvas>
+    <div class="br br-tl"></div><div class="br br-tr"></div>
+    <div class="br br-bl"></div><div class="br br-br"></div>
+    <div class="cam-hud">
+      <div class="hpill"><div class="hdot" id="camDot"></div><span id="camStatusTxt">KAPALI</span></div>
+      <div class="hpill" id="modePill" style="display:none;"><span id="modeTxt">CMJ</span></div>
+    </div>
+    <div class="angles-hud" id="anglesHud"></div>
+    <div class="flash-ov" id="flashOv"></div>
+    <div class="phase-ov" id="phaseOv">
+      <div class="phase-num" id="phaseNum" style="color:var(--acc2);">3</div>
+      <div class="phase-lbl" id="phaseLbl">Hazirlan</div>
+    </div>
+    <div class="result-ov" id="resultOv">
+      <div class="result-big" id="resultBig">-</div>
+      <div class="result-unit">CM YUKSEKLIK</div>
+      <div class="result-sub" id="resultSub">-</div>
+      <div class="result-btns">
+        <button class="btn btn-acc" onclick="acceptJump()">&#10003; KAYDET</button>
+        <button class="btn btn-ghost" onclick="rejectJump()">&#10007; Reddet</button>
+      </div>
+    </div>
+    <div class="load-ov" id="loadOv">
+      <div class="spinner"></div>
+      <div class="load-txt">POSE MODELI YUKLENIYOR</div>
+    </div>
+  </div>
+
+  <!-- BOTTOM PANEL -->
+  <div class="bottom-panel">
+    <!-- Mode chips -->
+    <div class="mode-row">
+      <div class="mode-chip on" onclick="setMode(this,'CMJ')">CMJ</div>
+      <div class="mode-chip" onclick="setMode(this,'SJ')">Squat Jump</div>
+      <div class="mode-chip" onclick="setMode(this,'DJ')">Drop Jump</div>
+      <div class="mode-chip" onclick="setMode(this,'UNI-L')">Tek Bacak Sol</div>
+      <div class="mode-chip" onclick="setMode(this,'UNI-R')">Tek Bacak Sag</div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls" style="margin-bottom:8px;">
+      <button class="rec-btn" id="recBtn" onclick="handleRec()">
+        <span id="recIcon">&#9654;</span>
+      </button>
+      <div class="ctrl-right">
+        <div class="status-txt" id="statusTxt">Basmak icin &#9654; bas</div>
+        <div class="session-row" id="sessionRow">
+          <div style="font-size:9px;color:var(--muted);white-space:nowrap;">Olcum yok</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <button class="btn btn-ghost" style="font-size:9px;padding:6px 8px;" onclick="saveSession()">&#128190; Kaydet</button>
+        <button class="btn btn-ghost" style="font-size:9px;padding:6px 8px;" onclick="clearSession()">&#128465;</button>
+      </div>
+    </div>
+
+    <!-- Manual entry -->
+    <div class="manual-row">
+      <div class="ig" style="flex:1;"><label>Manuel cm</label><input type="number" id="manCm" placeholder="45.0" step="0.1"></div>
+      <div class="ig" style="flex:1;"><label>Ucus ms</label><input type="number" id="manMs" placeholder="auto" oninput="msToH()"></div>
+      <button class="btn btn-acc" onclick="addManual()" style="flex-shrink:0;padding:8px 12px;">+</button>
+      <button class="btn btn-ghost" onclick="nextAthlete()" style="flex-shrink:0;padding:8px 10px;font-size:9px;">&#8594; Sıradaki</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+  OVERLAYS
+═══════════════════════════════════════ -->
+
+<!-- ADD ATHLETE -->
+<div class="ov" id="addAthleteOv">
+  <div class="ov-hdr">
+    <div class="ov-title">YENİ SPORCU</div>
+    <button class="ov-close" onclick="closeOv('addAthleteOv')">&#10005;</button>
+  </div>
+  <div class="ov-body">
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+      <div class="ig"><label>Ad Soyad *</label><input type="text" id="nName" placeholder="Ahmet Yilmaz" style="font-size:16px;"></div>
+      <div style="display:flex;gap:8px;">
+        <div class="ig" style="flex:1;"><label>Yas</label><input type="number" id="nAge" placeholder="22"></div>
+        <div class="ig" style="flex:1;"><label>Boy (cm)</label><input type="number" id="nHeight" placeholder="180"></div>
+        <div class="ig" style="flex:1;"><label>Kilo (kg)</label><input type="number" id="nWeight" placeholder="75"></div>
+      </div>
+      <div class="ig"><label>Branş / Pozisyon</label><input type="text" id="nSport" placeholder="Basketbol / Guard"></div>
+      <div class="ig"><label>Renk</label>
+        <select id="nColor" style="background:var(--s2);border:1px solid var(--bd);color:var(--text);font-family:var(--fm);font-size:13px;padding:8px 10px;border-radius:6px;outline:none;">
+          <option value="#ff6a00">Turuncu</option>
+          <option value="#00cfff">Mavi</option>
+          <option value="#b06eff">Mor</option>
+          <option value="#00e676">Yesil</option>
+          <option value="#ff3355">Kirmizi</option>
+          <option value="#ffaa00">Amber</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-acc btn-block" style="padding:14px;font-size:14px;border-radius:8px;" onclick="createAthlete()">&#10003; SPORCU OLUSTUR</button>
+  </div>
+</div>
+
+<!-- STATS OVERLAY -->
+<div class="ov" id="statsOv">
+  <div class="ov-hdr">
+    <div class="ov-title">&#128202; İSTATİSTİK</div>
+    <div style="display:flex;gap:6px;margin-left:auto;">
+      <button class="btn btn-blue" style="font-size:9px;padding:6px 10px;" onclick="genPDF()">&#128196; PDF</button>
+      <button class="ov-close" onclick="closeOv('statsOv')">&#10005;</button>
+    </div>
+  </div>
+  <div class="ov-body">
+    <!-- Athlete selector in stats -->
+    <div style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:12px;padding-bottom:2px;" id="statsAthRow"></div>
+    <div id="statsContent"></div>
+  </div>
+</div>
+
+<!-- SQUAD OVERVIEW -->
+<div class="ov" id="squadOv">
+  <div class="ov-hdr">
+    <div class="ov-title">&#127951; TAKIM ÖZETİ</div>
+    <div style="display:flex;gap:6px;margin-left:auto;">
+      <button class="btn btn-blue" style="font-size:9px;padding:6px 10px;" onclick="genTeamPDF()">&#128196; Takim PDF</button>
+      <button class="ov-close" onclick="closeOv('squadOv')">&#10005;</button>
+    </div>
+  </div>
+  <div class="ov-body" id="squadContent"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════════════════════════════════
+  JAVASCRIPT
+═══════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ═══════════════════════════════════════
+// DATA STORE
+// ═══════════════════════════════════════
+var DB = {
+  athletes: [],
+  activeId: null,
+  get active() { return this.athletes.find(function(a){return a.id===DB.activeId;})||null; },
+  save: function() {
+    try { localStorage.setItem('jl_v4', JSON.stringify({athletes:this.athletes,activeId:this.activeId})); } catch(e){}
+  },
+  load: function() {
+    try {
+      var d = JSON.parse(localStorage.getItem('jl_v4')||'{}');
+      this.athletes = d.athletes||[];
+      this.activeId = d.activeId||null;
+    } catch(e){}
+  },
+  ath: function(id) { return this.athletes.find(function(a){return a.id===id;}); },
+  addJump: function(athleteId, data) {
+    var a = this.ath(athleteId);
+    if(!a) return;
+    if(!a.jumps) a.jumps=[];
+    a.jumps.push(Object.assign({}, data, {
+      ts: Date.now(),
+      date: new Date().toLocaleDateString('tr-TR'),
+      time: new Date().toLocaleTimeString('tr-TR')
+    }));
+    this.save();
+  }
+};
+DB.load();
+
+// ═══════════════════════════════════════
+// ATHLETE MANAGEMENT
+// ═══════════════════════════════════════
+function createAthlete() {
+  var name = document.getElementById('nName').value.trim();
+  if(!name) { toast('Ad gerekli!'); return; }
+  var a = {
+    id: 'a' + Date.now(),
+    name: name,
+    age: parseInt(document.getElementById('nAge').value)||null,
+    height: parseFloat(document.getElementById('nHeight').value)||null,
+    weight: parseFloat(document.getElementById('nWeight').value)||null,
+    sport: document.getElementById('nSport').value.trim(),
+    color: document.getElementById('nColor').value,
+    initials: name.split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2),
+    jumps: [],
+    created: Date.now()
+  };
+  DB.athletes.push(a);
+  DB.save();
+  setActive(a.id);
+  closeOv('addAthleteOv');
+  renderAll();
+  ['nName','nAge','nHeight','nWeight','nSport'].forEach(function(id){document.getElementById(id).value='';});
+  toast('Sporcu olusturuldu: ' + name);
+}
+
+function setActive(id) {
+  DB.activeId = id;
+  DB.save();
+  renderAll();
+  updateSessionUI();
+  updateStatsOv();
+}
+
+function renderAll() {
+  renderSquadBar();
+  renderSetupList();
+  updateCounters();
+}
+
+function renderSquadBar() {
+  var bar = document.getElementById('squadBar');
+  if(!bar) return;
+  var html = '<div class="squad-add" onclick="openOv(\'addAthleteOv\')">+</div>';
+  DB.athletes.forEach(function(a) {
+    var jumps = a.jumps||[];
+    var best = jumps.length ? Math.max.apply(null, jumps.map(function(j){return j.cm;})).toFixed(1) : null;
+    var hasTodayData = jumps.some(function(j){return j.date===new Date().toLocaleDateString('tr-TR');});
+    html += '<div class="squad-chip'+(a.id===DB.activeId?' active':'')+(hasTodayData?' done':'')+'" onclick="setActive(\''+a.id+'\')">'
+      +'<div class="chip-av" style="background:'+a.color+'22;color:'+a.color+';">'+a.initials+'</div>'
+      +'<div class="chip-name">'+a.name.split(' ')[0]+'</div>'
+      +(best?'<div class="chip-best">'+best+'</div>':'')
+      +'</div>';
+  });
+  bar.innerHTML = html;
+}
+
+function renderSetupList() {
+  var el = document.getElementById('athleteSetupList');
+  if(!el) return;
+  if(!DB.athletes.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:11px;text-align:center;padding:16px;">Henuz sporcu eklenmedi.</div>';
+    return;
+  }
+  el.innerHTML = DB.athletes.map(function(a) {
+    var j = a.jumps||[];
+    var best = j.length ? Math.max.apply(null,j.map(function(x){return x.cm;})).toFixed(1) : '-';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--s2);border:1px solid '+(a.id===DB.activeId?a.color:'var(--bd)')+';border-radius:8px;margin-bottom:7px;cursor:pointer;" onclick="setActive(\''+a.id+'\')">'
+      +'<div style="width:36px;height:36px;border-radius:50%;background:'+a.color+'22;color:'+a.color+';display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:16px;font-weight:800;">'+a.initials+'</div>'
+      +'<div style="flex:1;"><div style="font-family:var(--fh);font-size:16px;font-weight:700;">'+a.name+'</div>'
+      +'<div style="font-size:9px;color:var(--muted);">'+(a.sport||'-')+' &bull; '+(a.age||'?')+'y &bull; '+(j.length)+' test</div></div>'
+      +'<div style="font-family:var(--fh);font-size:24px;font-weight:800;color:var(--acc);">'+best+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function updateCounters() {
+  var el = document.getElementById('athleteCountSetup');
+  if(el) el.textContent = DB.athletes.length;
+}
+
+function nextAthlete() {
+  var idx = DB.athletes.findIndex(function(a){return a.id===DB.activeId;});
+  var next = DB.athletes[idx+1];
+  if(next) {
+    saveSession();
+    setActive(next.id);
+    clearSession();
+    toast('Siradaki: ' + next.name);
+  } else {
+    toast('Son sporcu! Seans tamamlandi.');
+  }
+}
+
+// ═══════════════════════════════════════
+// CAMERA + MEDIAPIPE
+// ═══════════════════════════════════════
+var poseInst=null, camInst=null, camReady=false, poseReady=false;
+var lastLm=null;
+var jPhase='idle'; // idle | countdown | armed | live
+var jAirborne=false, jFlightStart=0, jAnkleBase=null, jPending=null;
+var jCountdownTimer=null;
+
+function setWrapH() {
+  var wrap = document.getElementById('camWrap');
+  if(wrap) wrap.style.height = Math.round(window.innerWidth * 0.70) + 'px';
+}
+
+async function initCamera() {
+  setWrapH();
+  document.getElementById('loadOv').style.display = 'flex';
+  setCamUI('warn','YUKLENIYOR');
+  try {
+    if(!poseInst) {
+      poseInst = new Pose({ locateFile: function(f){ return 'https://cdn.jsdelivr.net/npm/@mediapipe/pose/' + f; } });
+      poseInst.setOptions({ modelComplexity:1, smoothLandmarks:true, minDetectionConfidence:0.55, minTrackingConfidence:0.5 });
+      poseInst.onResults(onPoseResults);
+    }
+    if(camInst) { try{camInst.stop();}catch(e){} }
+    var video = document.getElementById('camVideo');
+    camInst = new Camera(video, {
+      onFrame: async function() { if(poseInst) await poseInst.send({image:video}); },
+      width: 640, height: 480
+    });
+    await camInst.start();
+    camReady = true;
+    document.getElementById('loadOv').style.display = 'none';
+    setCamUI('ok','POSE BEKLENIYOR');
+    toast('Kamera hazir!');
+  } catch(e) {
+    document.getElementById('loadOv').style.display = 'none';
+    setCamUI('','HATA');
+    alert('Kamera acilamadi.\n\nSafari kullanin\nAyarlar > Safari > Kamera > Izin Ver');
+  }
+}
+
+function setCamUI(dotClass, text) {
+  var dot = document.getElementById('camDot');
+  dot.className = 'hdot' + (dotClass?' '+dotClass:'');
+  document.getElementById('camStatusTxt').textContent = text;
+}
+
+// ═══════════════════════════════════════
+// POSE PROCESSING
+// ═══════════════════════════════════════
+function onPoseResults(res) {
+  if(!res.poseLandmarks) return;
+  var lm = res.poseLandmarks;
+  lastLm = lm;
+
+  if(!poseReady) {
+    poseReady = true;
+    setCamUI('ok','POSE HAZIR');
+    document.getElementById('statusTxt').textContent = 'Hazir. Kameranin onune gec, sonra bas.';
+  }
+
+  // Draw
+  var cvs = document.getElementById('camCanvas');
+  var W = cvs.width = res.image.width;
+  var H = cvs.height = res.image.height;
+  var ctx = cvs.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+
+  if(window.drawConnectors && window.POSE_CONNECTIONS)
+    drawConnectors(ctx, lm, POSE_CONNECTIONS, {color:'rgba(255,106,0,.5)',lineWidth:2});
+  if(window.drawLandmarks)
+    drawLandmarks(ctx, lm, {color:'#00cfff',fillColor:'rgba(0,207,255,.3)',radius:3.5,lineWidth:1.5});
+
+  [11,12,23,24,25,26,27,28].forEach(function(i) {
+    if(!lm[i]) return;
+    ctx.beginPath(); ctx.arc(lm[i].x*W,lm[i].y*H,7,0,Math.PI*2);
+    ctx.strokeStyle='#ff6a00'; ctx.lineWidth=2.5; ctx.stroke();
+  });
+
+  var lA=lm[27], rA=lm[28];
+  if(lA&&rA) {
+    // Ground calibration when not live
+    if(jPhase!=='live') jAnkleBase = jAnkleBase===null ? (lA.y+rA.y)/2 : jAnkleBase*.97+((lA.y+rA.y)/2)*.03;
+    var gy = jAnkleBase * H;
+    ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy);
+    ctx.strokeStyle='rgba(255,106,0,.35)'; ctx.lineWidth=1.5; ctx.setLineDash([7,5]); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // Live angles HUD
+  var lk=calcAngle(lm[23],lm[25],lm[27]);
+  var rk=calcAngle(lm[24],lm[26],lm[28]);
+  var diff=Math.abs(lk-rk);
+  var hud = document.getElementById('anglesHud');
+  hud.innerHTML =
+    achip('L-DIZ',lk+'d','var(--blue)') +
+    achip('R-DIZ',rk+'d','var(--acc)') +
+    achip('SIM',(diff<=10?'OK':diff+'d'),diff<=10?'var(--green)':'var(--red)');
+
+  // Flight detection
+  if(jPhase==='live' && lA && rA) {
+    var midY = (lA.y+rA.y)/2;
+    var elevated = (jAnkleBase - midY) > 0.030;
+    var now = performance.now();
+    if(!jAirborne && elevated) {
+      jAirborne=true; jFlightStart=now;
+      document.getElementById('camStatusTxt').textContent='HAVADA!';
+      document.getElementById('camDot').className='hdot live';
+      // Airborne flash on canvas
+      ctx.fillStyle='rgba(255,106,0,.06)'; ctx.fillRect(0,0,W,H);
+    } else if(jAirborne && !elevated) {
+      var tf=now-jFlightStart;
+      jAirborne=false;
+      document.getElementById('camDot').className='hdot ok';
+      if(tf>150 && tf<900) {
+        doJumpResult(tf);
+      } else {
+        document.getElementById('camStatusTxt').textContent='Tekrar dene (gecersiz)';
+        stopLive();
+      }
+    }
+    if(jAirborne) {
+      var el=now-jFlightStart;
+      ctx.fillStyle='rgba(255,106,0,.06)'; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='var(--acc)'; ctx.font='bold 24px Barlow Condensed,sans-serif';
+      ctx.textAlign='center'; ctx.fillText(Math.round(el)+'ms',W/2,38);
+    }
+  }
+}
+
+function achip(lbl,val,color) {
+  return '<div class="achip"><span class="achip-lbl">'+lbl+'</span><span class="achip-val" style="color:'+color+'">'+val+'</span></div>';
+}
+
+function calcAngle(A,B,C) {
+  if(!A||!B||!C) return 0;
+  var ax=A.x-B.x,ay=A.y-B.y,bx=C.x-B.x,by=C.y-B.y;
+  var dot=ax*bx+ay*by, mag=Math.sqrt(ax*ax+ay*ay)*Math.sqrt(bx*bx+by*by);
+  if(!mag) return 0;
+  return Math.round(Math.acos(Math.max(-1,Math.min(1,dot/mag)))*180/Math.PI);
+}
+
+// ═══════════════════════════════════════
+// RECORDING STATE MACHINE
+// ═══════════════════════════════════════
+var jumpMode='CMJ';
+
+function setMode(el, mode) {
+  jumpMode=mode;
+  document.querySelectorAll('.mode-chip').forEach(function(c){c.classList.remove('on');});
+  el.classList.add('on');
+  document.getElementById('modeTxt').textContent=mode;
+  document.getElementById('modePill').style.display='flex';
+}
+
+function handleRec() {
+  if(!camReady||!poseReady) { initCamera(); return; }
+  if(jPhase==='live') { stopLive(); return; }
+  if(jPhase==='countdown') { cancelCountdown(); return; }
+  startCountdown();
+}
+
+function startCountdown() {
+  jPhase='countdown';
+  var btn=document.getElementById('recBtn');
+  btn.classList.add('armed');
+  document.getElementById('recIcon').textContent='&#10005;';
+  var phOv=document.getElementById('phaseOv');
+  var phNum=document.getElementById('phaseNum');
+  var phLbl=document.getElementById('phaseLbl');
+  phOv.style.display='flex';
+  var n=3;
+  phNum.textContent=n; phNum.style.color='var(--acc2)'; phLbl.textContent='Hazirlan!';
+  jCountdownTimer=setInterval(function(){
+    n--;
+    if(n>0) { phNum.textContent=n; }
+    else {
+      clearInterval(jCountdownTimer); jCountdownTimer=null;
+      phOv.style.display='none';
+      startLive();
+    }
+  },900);
+}
+
+function cancelCountdown() {
+  if(jCountdownTimer){clearInterval(jCountdownTimer);jCountdownTimer=null;}
+  jPhase='idle';
+  document.getElementById('phaseOv').style.display='none';
+  document.getElementById('recBtn').className='rec-btn';
+  document.getElementById('recIcon').textContent='&#9654;';
+  document.getElementById('statusTxt').textContent='Iptal edildi';
+}
+
+function startLive() {
+  jPhase='live'; jAirborne=false; jAnkleBase=null;
+  var btn=document.getElementById('recBtn');
+  btn.classList.remove('armed'); btn.classList.add('live');
+  document.getElementById('recIcon').textContent='&#9646;&#9646;';
+  setCamUI('live','CANLI - SICRA!');
+  document.getElementById('statusTxt').textContent='Hazir! Simdi sicra.';
+  toast('Canli - sicra!');
+}
+
+function stopLive() {
+  jPhase='idle'; jAirborne=false;
+  var btn=document.getElementById('recBtn');
+  btn.classList.remove('live','armed');
+  document.getElementById('recIcon').textContent='&#9654;';
+  setCamUI('ok','HAZIR');
+  document.getElementById('statusTxt').textContent='Hazir.';
+}
+
+// ═══════════════════════════════════════
+// JUMP RESULT
+// ═══════════════════════════════════════
+var jumpSession=[];
+
+function doJumpResult(flightMs) {
+  var g=9.81;
+  var cm=Math.round(g*Math.pow(flightMs/1000,2)/8*10000)/100;
+  var v0=Math.round(g*(flightMs/1000)/2*100)/100;
+  var power=Math.round(61.9*v0);
+  jPending={cm:cm,flightMs:Math.round(flightMs),v0:v0,power:power,mode:jumpMode};
+
+  // Flash
+  var fl=document.getElementById('flashOv');
+  fl.style.opacity='1'; setTimeout(function(){fl.style.opacity='0';},200);
+
+  document.getElementById('resultBig').textContent=cm.toFixed(1);
+  document.getElementById('resultSub').textContent='v0='+v0+' m/s  |  '+Math.round(flightMs)+'ms  |  '+power+' W';
+  document.getElementById('resultOv').style.display='flex';
+  stopLive();
+}
+
+function acceptJump() {
+  if(!jPending) return;
+  jumpSession.push(jPending);
+  jPending=null;
+  document.getElementById('resultOv').style.display='none';
+  updateSessionUI();
+  toast(jumpSession[jumpSession.length-1].cm.toFixed(1)+' cm kaydedildi');
+}
+
+function rejectJump() {
+  document.getElementById('resultOv').style.display='none';
+  jPending=null;
+  toast('Reddedildi');
+}
+
+function addManual() {
+  var cm=parseFloat(document.getElementById('manCm').value);
+  var ms=parseFloat(document.getElementById('manMs').value);
+  if(!cm&&ms) cm=Math.round(9.81*Math.pow(ms/1000,2)/8*10000)/100;
+  if(!cm||cm<=0){toast('Deger girin!');return;}
+  cm=Math.round(cm*10)/10;
+  var tf=ms||Math.round(Math.sqrt(8*cm/100/9.81)*1000);
+  var v0=Math.round(9.81*tf/1000/2*100)/100;
+  jumpSession.push({cm:cm,flightMs:Math.round(tf),v0:v0,power:Math.round(61.9*v0),mode:jumpMode});
+  updateSessionUI();
+  document.getElementById('manCm').value=''; document.getElementById('manMs').value='';
+  toast(cm+' cm eklendi');
+}
+
+function msToH(){var ms=parseFloat(document.getElementById('manMs').value);if(ms>0)document.getElementById('manCm').value=Math.round(9.81*Math.pow(ms/1000,2)/8*10000)/100;}
+
+function updateSessionUI() {
+  if(!jumpSession.length) {
+    document.getElementById('sessionRow').innerHTML='<div style="font-size:9px;color:var(--muted);white-space:nowrap;">Olcum yok</div>';
+    return;
+  }
+  var best=Math.max.apply(null,jumpSession.map(function(s){return s.cm;}));
+  document.getElementById('sessionRow').innerHTML=[...jumpSession].reverse().map(function(s,i){
+    var idx=jumpSession.length-i;
+    var isBest=s.cm===best;
+    return '<div class="sitem'+(isBest?' best':'')+'"><div class="sitem-n">#'+idx+'</div><div class="sitem-v" style="color:'+(isBest?'var(--acc)':'var(--text)')+'">'+s.cm.toFixed(1)+'</div></div>';
+  }).join('');
+}
+
+function saveSession() {
+  if(!jumpSession.length){toast('Kaydedilecek olcum yok!');return;}
+  if(!DB.activeId){toast('Sporcu sec!');return;}
+  jumpSession.forEach(function(j){DB.addJump(DB.activeId,j);});
+  renderAll();
+  toast(jumpSession.length+' olcum kaydedildi: '+DB.active.name);
+}
+
+function clearSession() {
+  jumpSession=[];
+  updateSessionUI();
+  document.getElementById('statusTxt').textContent='Temizlendi.';
+}
+
+// ═══════════════════════════════════════
+// STATS OVERLAY
+// ═══════════════════════════════════════
+var statsActiveId=null;
+
+function updateStatsOv() {
+  if(!statsActiveId && DB.activeId) statsActiveId=DB.activeId;
+  renderStatsAthRow();
+  renderStatsContent();
+}
+
+function renderStatsAthRow() {
+  var el=document.getElementById('statsAthRow');
+  if(!el) return;
+  el.innerHTML=DB.athletes.map(function(a){
+    return '<div onclick="statsActiveId=\''+a.id+'\';renderStatsAthRow();renderStatsContent();" style="flex-shrink:0;padding:7px 12px;background:var(--s2);border:1px solid '+(a.id===statsActiveId?a.color:'var(--bd)')+';border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;">'
+      +'<div style="width:22px;height:22px;border-radius:50%;background:'+a.color+'22;color:'+a.color+';display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:11px;font-weight:800;">'+a.initials+'</div>'
+      +'<span style="font-size:10px;white-space:nowrap;">'+a.name.split(' ')[0]+'</span></div>';
+  }).join('');
+}
+
+function renderStatsContent() {
+  var el=document.getElementById('statsContent');
+  if(!el) return;
+  var a=DB.ath(statsActiveId||DB.activeId);
+  if(!a){el.innerHTML='<div style="color:var(--muted);text-align:center;padding:20px;">Sporcu sec</div>';return;}
+  var j=a.jumps||[];
+  if(!j.length){el.innerHTML='<div style="color:var(--muted);text-align:center;padding:20px;">Henuz olcum yok</div>';return;}
+
+  var allCm=j.map(function(x){return x.cm;});
+  var best=Math.max.apply(null,allCm);
+  var avg=Math.round(allCm.reduce(function(s,v){return s+v;},0)/allCm.length*10)/10;
+  var firstBest=j[0].cm, lastBest=j[j.length-1].cm;
+  var delta=Math.round((lastBest-firstBest)*10)/10;
+
+  // Compare last 3 sessions grouped by date
+  var byDate={};
+  j.forEach(function(x){if(!byDate[x.date])byDate[x.date]=[];byDate[x.date].push(x.cm);});
+  var dates=Object.keys(byDate);
+  var lastDateBest=dates.length?Math.max.apply(null,byDate[dates[dates.length-1]]):null;
+  var prevDateBest=dates.length>1?Math.max.apply(null,byDate[dates[dates.length-2]]):null;
+  var sessionDelta=prevDateBest?Math.round((lastDateBest-prevDateBest)*10)/10:null;
+
+  var classify=function(cm){return cm>=65?'Elite':cm>=55?'Ileri':cm>=45?'Orta+':cm>=35?'Orta':'Baslangic';};
+
+  el.innerHTML=
+    '<div style="font-family:var(--fh);font-size:20px;font-weight:800;margin-bottom:10px;color:'+a.color+';">'+a.name+'</div>'
+    +'<div class="stat-grid">'
+    +'<div class="stat-box"><div class="stat-lbl">En İyi</div><div class="stat-val" style="color:var(--acc)">'+best.toFixed(1)+'</div><div class="stat-unit">cm</div></div>'
+    +'<div class="stat-box"><div class="stat-lbl">Ortalama</div><div class="stat-val" style="color:var(--blue)">'+avg+'</div><div class="stat-unit">cm</div></div>'
+    +'<div class="stat-box"><div class="stat-lbl">Son Seans En İyi</div><div class="stat-val" style="color:var(--acc2)">'+(lastDateBest?lastDateBest.toFixed(1):'-')+'</div><div class="stat-unit">cm</div>'
+    +(sessionDelta!==null?'<div class="stat-delta '+(sessionDelta>=0?'up':'dn')+'">'+(sessionDelta>=0?'&#9650; +':'&#9660; ')+Math.abs(sessionDelta)+' cm</div>':'')
+    +'</div>'
+    +'<div class="stat-box"><div class="stat-lbl">Toplam Test</div><div class="stat-val" style="color:var(--muted)">'+j.length+'</div><div class="stat-unit">olcum</div></div>'
+    +'</div>'
+    +'<div style="background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">'
+    +'<div style="font-family:var(--fh);font-size:28px;font-weight:800;color:var(--blue);">'+classify(best)+'</div>'
+    +'<div style="font-size:10px;color:var(--muted);">Siniflandirma &bull; '+(a.age?a.age+'y':'') +' &bull; '+(a.sport||'')+' &bull; '+(a.height?a.height+'cm':'')+'</div>'
+    +'</div>'
+    // Trend chart
+    +'<div class="chart-box"><canvas id="statsChart" height="120" style="width:100%;"></canvas></div>'
+    // History table
+    +'<div style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin:10px 0 6px;">GECMİS OLCUMLER</div>'
+    +'<table class="tbl"><thead><tr><th>Tarih</th><th>Mod</th><th>cm</th><th>Ucus</th><th>v0</th></tr></thead><tbody>'
+    +[...j].reverse().map(function(x){
+      var isBest=x.cm===best;
+      return '<tr'+(isBest?' class="best-row"':'')+'><td>'+x.date+'</td><td style="color:var(--muted)">'+x.mode+'</td><td style="color:'+(isBest?'var(--acc)':'var(--text)')+'">'+x.cm.toFixed(1)+'</td><td>'+x.flightMs+'ms</td><td>'+x.v0+'</td></tr>';
+    }).join('')
+    +'</tbody></table>';
+
+  // Draw chart
+  drawStatsChart(j, a.color);
+}
+
+function drawStatsChart(jumps, color) {
+  var c=document.getElementById('statsChart');
+  if(!c) return;
+  var ctx=c.getContext('2d');
+  var W=c.width=c.offsetWidth||300;
+  var H=120; c.height=H;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#0f0f1e'; ctx.fillRect(0,0,W,H);
+  if(jumps.length<2){ctx.fillStyle='#55557a';ctx.font='11px Space Mono,monospace';ctx.textAlign='center';ctx.fillText('En az 2 olcum gerekli',W/2,H/2);return;}
+  var vals=jumps.map(function(j){return j.cm;});
+  var pad=16,maxV=Math.max.apply(null,vals)+3,minV=Math.max(0,Math.min.apply(null,vals)-3);
+  var px=function(i){return pad+i/(vals.length-1)*(W-pad*2);};
+  var py=function(v){return H-pad-(v-minV)/(maxV-minV)*(H-pad*2);};
+  // Grid
+  ctx.strokeStyle='#1e1e38'; ctx.lineWidth=0.5;
+  for(var i=0;i<=3;i++){var y=pad+i/3*(H-pad*2);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke();}
+  // Fill
+  var grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,color+'44'); grad.addColorStop(1,color+'00');
+  ctx.beginPath(); ctx.moveTo(px(0),H-pad);
+  vals.forEach(function(v,i){ctx.lineTo(px(i),py(v));});
+  ctx.lineTo(px(vals.length-1),H-pad); ctx.closePath();
+  ctx.fillStyle=grad; ctx.fill();
+  // Line
+  ctx.strokeStyle=color; ctx.lineWidth=2; ctx.lineJoin='round';
+  ctx.beginPath(); vals.forEach(function(v,i){i===0?ctx.moveTo(px(i),py(v)):ctx.lineTo(px(i),py(v));});
+  ctx.stroke();
+  // Dots
+  vals.forEach(function(v,i){
+    ctx.fillStyle=color; ctx.beginPath(); ctx.arc(px(i),py(v),3,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#55557a'; ctx.font='8px Space Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText(v.toFixed(0),px(i),py(v)-7);
+  });
+}
+
+// ═══════════════════════════════════════
+// PDF REPORT
+// ═══════════════════════════════════════
+function genPDF() {
+  var a=DB.ath(statsActiveId||DB.activeId);
+  if(!a){toast('Sporcu sec!');return;}
+  toast('PDF hazırlanıyor...');
+  setTimeout(function(){doPDF(a);},300);
+}
+
+function doPDF(a) {
+  var j=a.jumps||[];
+  if(!j.length){toast('Olcum yok!');return;}
+  var jsPDF=window.jspdf.jsPDF;
+  var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  var W=210; var M=18; var y=0;
+  var best=Math.max.apply(null,j.map(function(x){return x.cm;}));
+  var avg=Math.round(j.reduce(function(s,x){return s+x.cm;},0)/j.length*10)/10;
+  var v0best=j.find(function(x){return x.cm===best;}).v0;
+  var classify=function(cm){return cm>=65?'Elit':cm>=55?'Ileri':cm>=45?'Orta+':cm>=35?'Orta':'Baslangic';};
+  var grade=classify(best);
+
+  // HEADER
+  doc.setFillColor(255,255,255); doc.rect(0,0,W,297,'F');
+  doc.setFillColor(220,80,0); doc.rect(0,0,W,24,'F');
+  doc.setFillColor(180,50,0); doc.rect(0,22,W,2,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold'); doc.setFontSize(18);
+  doc.text('JumpLab Pro',M,12);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text('Dikey Sicrama Analiz Raporu',M,19);
+  doc.setFontSize(8);
+  doc.text(new Date().toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'}),W-M,19,{align:'right'});
+  y=32;
+
+  // ATHLETE INFO BOX
+  doc.setFillColor(248,248,252); doc.roundedRect(M,y,W-M*2,24,2,2,'F');
+  doc.setDrawColor(220,80,0); doc.setLineWidth(0.3);
+  doc.roundedRect(M,y,W-M*2,24,2,2,'S');
+  doc.setTextColor(30,30,30); doc.setFont('helvetica','bold'); doc.setFontSize(14);
+  doc.text(a.name,M+4,y+8);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,100,100);
+  var info=[a.sport||'',a.age?a.age+' yas':'',a.height?a.height+' cm':'',a.weight?a.weight+' kg':''].filter(Boolean).join('  |  ');
+  doc.text(info,M+4,y+15);
+  // Score badge
+  var sc=[]; if(best>=65)sc=[0,140,70]; else if(best>=45)sc=[200,120,0]; else sc=[180,40,40];
+  doc.setFillColor(sc[0],sc[1],sc[2]); doc.roundedRect(W-M-28,y+3,26,18,2,2,'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(16);
+  doc.text(best.toFixed(1),W-M-15,y+12,{align:'center'});
+  doc.setFontSize(7);
+  doc.text('cm',W-M-15,y+18,{align:'center'});
+  y+=32;
+
+  // SUMMARY STATS
+  doc.setTextColor(220,80,0); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.text('PERFORMANS OZETI',M,y); y+=4;
+  doc.setDrawColor(220,80,0); doc.setLineWidth(0.3); doc.line(M,y,W-M,y); y+=5;
+  doc.autoTable({
+    startY:y,
+    head:[['Metrik','Deger','Birim','Referans Deger','Sinif']],
+    body:[
+      ['En İyi Sicrama',best.toFixed(1),'cm','Elit: >65 | Ileri: >55 | Orta: >45',grade],
+      ['Ortalama Sicrama',avg,'cm','-','-'],
+      ['Kalkis Hizi (v0)',v0best,'m/s','<2.5: Dusuk | 2.5-3.0: Orta | >3.0: İyi',v0best>=3?'İyi':v0best>=2.5?'Orta':'Dusuk'],
+      ['Toplam Test Sayisi',j.length,'adet','-','-'],
+    ],
+    styles:{fontSize:8.5,cellPadding:2.8,textColor:[40,40,40],fillColor:[255,255,255],lineColor:[220,220,220],lineWidth:0.2},
+    headStyles:{fillColor:[220,80,0],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,248,252]},
+    columnStyles:{2:{halign:'center'},4:{halign:'center',fontStyle:'bold'}},
+    didParseCell:function(d){
+      if(d.section==='body'&&d.column.index===4){
+        if(d.cell.raw==='Elit')d.cell.styles.textColor=[0,140,70];
+        else if(d.cell.raw==='İyi'||d.cell.raw==='Ileri')d.cell.styles.textColor=[0,100,180];
+        else if(d.cell.raw==='Dusuk')d.cell.styles.textColor=[180,40,40];
+      }
+    },
+    margin:{left:M,right:M}
+  });
+  y=doc.lastAutoTable.finalY+8;
+
+  // BIOMECHANICAL ASSESSMENT
+  if(y>220){doc.addPage();y=20;}
+  doc.setTextColor(220,80,0); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.text('BIYOMEKANIK DEGERLENDIRME',M,y); y+=4;
+  doc.setDrawColor(220,80,0); doc.line(M,y,W-M,y); y+=5;
+  var flightMs=j.find(function(x){return x.cm===best;}).flightMs;
+  var bios=[
+    ['Ucus Suresi',flightMs+' ms','h = g*tf^2/8 formuluyle yukseklik hesaplanir (Bosco, 1983).'],
+    ['Kalkis Hizi',v0best+' m/s','v0 = g * tf / 2. Yugsek v0, patlayici guc gostergesidir.'],
+    ['Patlayici Guc',j.find(function(x){return x.cm===best;}).power+' W','Bosco formulu: P = 60.7 * v0 (tahmini). Standart vucut agrligiyla normalize edilebilir.'],
+    ['Yer Cekimi Etkisi','9.81 m/s^2','Tum hesaplamalarda standart yer cekimi ivmesi kullanilmistir.'],
+  ];
+  bios.forEach(function(bio){
+    if(y>250){doc.addPage();y=20;}
+    doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(40,40,40);
+    doc.text(bio[0]+': '+bio[1],M,y); y+=4;
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,100,100);
+    var lines=doc.splitTextToSize(bio[2],W-M*2);
+    doc.text(lines,M,y); y+=lines.length*4+3;
+  });
+  y+=3;
+
+  // TEST HISTORY TABLE
+  if(y>220){doc.addPage();y=20;}
+  doc.setTextColor(220,80,0); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.text('TEST GECMISI (Tum Olcumler)',M,y); y+=4;
+  doc.setDrawColor(220,80,0); doc.line(M,y,W-M,y); y+=2;
+  doc.autoTable({
+    startY:y,
+    head:[['#','Tarih','Saat','Mod','Yukseklik (cm)','Ucus (ms)','v0 (m/s)','Guc (W)']],
+    body:[...j].reverse().map(function(x,i){
+      return[j.length-i,x.date,x.time||'-',x.mode,x.cm.toFixed(1),x.flightMs,x.v0,x.power];
+    }),
+    styles:{fontSize:7.5,cellPadding:2.2,textColor:[40,40,40],fillColor:[255,255,255],lineColor:[220,220,220],lineWidth:0.2},
+    headStyles:{fillColor:[220,80,0],textColor:[255,255,255],fontStyle:'bold',fontSize:7.5},
+    alternateRowStyles:{fillColor:[248,248,252]},
+    columnStyles:{0:{halign:'center',cellWidth:8},4:{halign:'center',fontStyle:'bold'},5:{halign:'center'},6:{halign:'center'},7:{halign:'center'}},
+    didParseCell:function(d){
+      if(d.section==='body'&&d.column.index===4){
+        if(parseFloat(d.cell.raw)===best)d.cell.styles.textColor=[220,80,0];
+      }
+    },
+    margin:{left:M,right:M}
+  });
+  y=doc.lastAutoTable.finalY+8;
+
+  // RECOMMENDATIONS
+  if(y>220){doc.addPage();y=20;}
+  doc.setTextColor(220,80,0); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.text('ANTRENORLUK ONERILERI',M,y); y+=4;
+  doc.setDrawColor(220,80,0); doc.line(M,y,W-M,y); y+=5;
+  var recs=best>=65
+    ?['Elit performans seviyesi. Performansi koruyucu ve spesifik guc programlari uygulanabilir.','Plyometrik antrenman yogunlugu yuksek tutulabilir.','Reaktif guc testleri (RSI) ve asimetri analizi onerilebilir.']
+    :best>=55
+    ?['Ileri duzey performans. Maksimal guc ve patlayici guc antrenmanlarini entegre edin.','Squat Jump ile CMJ arasindaki fark analiz edilmeli (elastik geri donus kapasitesi).','Hedef: 65 cm ve uzeri elit kategori.']
+    :best>=45
+    ?['Orta duzey performans. Temel guc antrenmanina odaklanin.','Back squat 1RM artirilmali, plyometrik antrenman eklenmeli.','6-8 haftalik progresif patlayici guc programi onerilir.']
+    :['Baslangic seviyesi. Temel kuvvet ve koordinasyon calismalari onceliklidir.','Vucut agirligiyla squat, lunge ve step-up hareketleri ile baslangic yapilabilir.','8-12 hafta temel guc antrenmanindan sonra sicrama antrenmanina gecis yapilabilir.'];
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(60,60,60);
+  recs.forEach(function(r){
+    if(y>265){doc.addPage();y=20;}
+    var lines=doc.splitTextToSize('• '+r,W-M*2);
+    doc.text(lines,M,y); y+=lines.length*4.5+1;
+  });
+
+  // FOOTER
+  var pages=doc.internal.getNumberOfPages();
+  for(var i=1;i<=pages;i++){
+    doc.setPage(i);
+    doc.setFillColor(248,248,252); doc.rect(0,doc.internal.pageSize.getHeight()-10,W,10,'F');
+    doc.setDrawColor(220,80,0); doc.setLineWidth(0.3); doc.line(M,doc.internal.pageSize.getHeight()-10,W-M,doc.internal.pageSize.getHeight()-10);
+    doc.setTextColor(150,100,50); doc.setFontSize(7); doc.setFont('helvetica','normal');
+    doc.text('JumpLab Pro  •  '+a.name+'  •  '+new Date().toLocaleDateString('tr-TR'),M,doc.internal.pageSize.getHeight()-3);
+    doc.text('Sayfa '+i+'/'+pages,W-M,doc.internal.pageSize.getHeight()-3,{align:'right'});
+    doc.setTextColor(180,180,180); doc.setFontSize(6);
+    doc.text('Formul: h = g x tf^2 / 8  |  Bosco 1983  |  Bu rapor JumpLab Pro ile olusturulmustur.',W/2,doc.internal.pageSize.getHeight()-0.5,{align:'center'});
+  }
+  doc.save('JumpLab_'+a.name.replace(/\s/g,'_')+'_'+new Date().toLocaleDateString('tr-TR').replace(/\./g,'-')+'.pdf');
+  toast('PDF indirildi!');
+}
+
+function genTeamPDF() {
+  if(!DB.athletes.length){toast('Sporcu yok!');return;}
+  toast('Takim PDF hazirlanıyor...');
+  setTimeout(function(){
+    var jsPDF=window.jspdf.jsPDF;
+    var doc=new jsPDF(); var W=210; var M=18; var y=24;
+    doc.setFillColor(220,80,0); doc.rect(0,0,W,22,'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(16);
+    doc.text('JumpLab Pro - Takim Raporu',M,10);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8);
+    doc.text(new Date().toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'}),W-M,18,{align:'right'});
+    var classify=function(cm){return cm>=65?'Elit':cm>=55?'Ileri':cm>=45?'Orta+':cm>=35?'Orta':'Baslangic';};
+    doc.autoTable({
+      startY:y,
+      head:[['Sporcu','Brans','Yas','En İyi (cm)','Ort. (cm)','v0 (m/s)','Test','Sinif']],
+      body:DB.athletes.map(function(a){
+        var j=a.jumps||[];
+        if(!j.length)return[a.name,a.sport||'-',a.age||'-','-','-','-','0','-'];
+        var best=Math.max.apply(null,j.map(function(x){return x.cm;}));
+        var avg=Math.round(j.reduce(function(s,x){return s+x.cm;},0)/j.length*10)/10;
+        var v0=j.find(function(x){return x.cm===best;}).v0;
+        return[a.name,a.sport||'-',a.age||'-',best.toFixed(1),avg,v0,j.length,classify(best)];
+      }),
+      styles:{fontSize:8,cellPadding:2.5,textColor:[40,40,40],fillColor:[255,255,255],lineColor:[220,220,220],lineWidth:0.2},
+      headStyles:{fillColor:[220,80,0],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[248,248,252]},
+      margin:{left:M,right:M}
+    });
+    var pages=doc.internal.getNumberOfPages();
+    for(var i=1;i<=pages;i++){
+      doc.setPage(i);
+      doc.setFillColor(248,248,252); doc.rect(0,doc.internal.pageSize.getHeight()-8,W,8,'F');
+      doc.setTextColor(150,100,50); doc.setFontSize(7);
+      doc.text('JumpLab Pro - Takim Raporu',M,doc.internal.pageSize.getHeight()-2);
+      doc.text('Sayfa '+i+'/'+pages,W-M,doc.internal.pageSize.getHeight()-2,{align:'right'});
+    }
+    doc.save('JumpLab_Takim_'+new Date().toLocaleDateString('tr-TR').replace(/\./g,'-')+'.pdf');
+    toast('Takim PDF indirildi!');
+  },300);
+}
+
+// ═══════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════
+function goSetup() {
+  if(camInst){try{camInst.stop();}catch(e){}camInst=null;}
+  camReady=false; poseReady=false; lastLm=null; jPhase='idle';
+  showScreen('setupScreen');
+}
+
+function goTest() {
+  if(!DB.athletes.length){toast('Once sporcu ekle!');return;}
+  showScreen('testScreen');
+  renderSquadBar();
+  if(!camReady) setTimeout(initCamera,300);
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  document.getElementById(id).classList.add('active');
+}
+
+function openOv(id) {
+  document.getElementById(id).classList.add('open');
+  if(id==='statsOv'){statsActiveId=DB.activeId;updateStatsOv();}
+  if(id==='squadOv'){renderSquadSummary();}
+}
+function closeOv(id) { document.getElementById(id).classList.remove('open'); }
+
+function renderSquadSummary() {
+  var classify=function(cm){return cm>=65?'Elit':cm>=55?'Ileri':cm>=45?'Orta+':cm>=35?'Orta':'Baslangic';};
+  document.getElementById('squadContent').innerHTML=
+    '<table class="tbl"><thead><tr><th>Sporcu</th><th>En İyi</th><th>Ort.</th><th>Sinif</th><th>Test</th></tr></thead><tbody>'
+    +DB.athletes.map(function(a){
+      var j=a.jumps||[];
+      if(!j.length) return '<tr><td><div style="color:'+a.color+';font-family:var(--fh);font-size:14px;font-weight:700;">'+a.name+'</div></td><td colspan="4" style="color:var(--muted);">Olcum yok</td></tr>';
+      var best=Math.max.apply(null,j.map(function(x){return x.cm;}));
+      var avg=Math.round(j.reduce(function(s,x){return s+x.cm;},0)/j.length*10)/10;
+      return '<tr><td><div style="color:'+a.color+';font-family:var(--fh);font-size:14px;font-weight:700;">'+a.name+'</div><div style="font-size:8px;color:var(--muted);">'+(a.sport||'')+'</div></td>'
+        +'<td style="color:var(--acc);font-family:var(--fh);font-size:18px;font-weight:700;">'+best.toFixed(1)+'</td>'
+        +'<td>'+avg+'</td>'
+        +'<td style="color:var(--blue);">'+classify(best)+'</td>'
+        +'<td style="color:var(--muted);">'+j.length+'</td></tr>';
+    }).join('')+'</tbody></table>';
+}
+
+var toastTimer;
+function toast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){t.classList.remove('show');},2600);
+}
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+window.addEventListener('resize',setWrapH);
+document.addEventListener('DOMContentLoaded',function(){
+  setWrapH();
+  renderAll();
+  if(!DB.athletes.length) {
+    toast('Baslangic: "Sporcu Ekle" butonuna bas');
+  } else {
+    toast(DB.athletes.length+' sporcu yuklendi');
+  }
+});
+</script>
+</body>
+</html>
