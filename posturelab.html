@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>PostureLab Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root{
+  --bg:#07070f;--p1:#0e0e1c;--p2:#141428;--p3:#1a1a32;--bd:#252545;
+  --green:#00e676;--cyan:#00e5ff;--orange:#ff6d00;
+  --yellow:#ffd740;--red:#ff5252;--purple:#b06eff;
+  --text:#eeeeff;--muted:#55557a;
+  --fh:'Rajdhani',sans-serif;--fm:'Space Mono',monospace;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--fm);overflow:hidden;}
+#app{height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+.screen{display:none;flex-direction:column;height:100%;overflow:hidden;}
+.screen.active{display:flex;}
+
+/* HOME */
+#homeScreen{background:radial-gradient(ellipse at 50% -10%,rgba(0,230,118,.07) 0%,transparent 60%),var(--bg);align-items:center;justify-content:center;padding:20px;}
+.home-logo{font-family:var(--fh);font-size:36px;font-weight:700;letter-spacing:4px;text-align:center;color:var(--text);margin-bottom:2px;}
+.home-logo span{color:var(--green);}
+.home-sub{font-size:9px;color:var(--muted);letter-spacing:3px;text-align:center;margin-bottom:24px;text-transform:uppercase;}
+.home-card{background:var(--p1);border:1px solid var(--bd);border-radius:16px;padding:22px;width:100%;max-width:400px;}
+.home-icon{font-size:44px;text-align:center;margin-bottom:10px;}
+.home-title{font-family:var(--fh);font-size:19px;font-weight:700;text-align:center;margin-bottom:8px;line-height:1.3;}
+.home-desc{font-size:11px;color:var(--muted);line-height:1.9;text-align:center;margin-bottom:14px;}
+.badges{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-bottom:18px;}
+.badge{font-size:9px;padding:3px 7px;border-radius:20px;background:rgba(0,229,255,.07);color:var(--cyan);border:1px solid rgba(0,229,255,.2);}
+.big-btn{width:100%;padding:15px;background:var(--green);color:#000;border:none;border-radius:10px;font-family:var(--fh);font-size:16px;font-weight:700;letter-spacing:2px;cursor:pointer;transition:all .15s;text-transform:uppercase;}
+.big-btn:active{transform:scale(.97);}
+.big-btn:disabled{background:var(--bd);color:var(--muted);cursor:not-allowed;}
+.home-hint{font-size:10px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.7;}
+
+/* HEADER */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:env(safe-area-inset-top,10px) 14px 10px;background:rgba(7,7,15,.97);border-bottom:1px solid var(--bd);flex-shrink:0;}
+.hdr-title{font-family:var(--fh);font-size:15px;font-weight:700;letter-spacing:3px;color:var(--cyan);}
+.back-btn{background:var(--p2);border:1px solid var(--bd);color:var(--text);border-radius:6px;padding:6px 11px;font-family:var(--fm);font-size:10px;cursor:pointer;white-space:nowrap;}
+.status-row{display:flex;align-items:center;gap:5px;}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+.sdot.ok{background:var(--green);box-shadow:0 0 6px var(--green);}
+.sdot.warn{background:var(--yellow);box-shadow:0 0 6px var(--yellow);animation:blink 1s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.stext{font-size:9px;color:var(--muted);letter-spacing:1px;}
+
+/* CAMERA */
+.cam-wrap{position:relative;background:#000;flex-shrink:0;overflow:hidden;}
+.cam-wrap video{width:100%;height:100%;object-fit:cover;display:block;}
+.cam-wrap canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+.br{position:absolute;z-index:5;width:22px;height:22px;pointer-events:none;}
+.br-tl{top:9px;left:9px;border-top:2px solid var(--green);border-left:2px solid var(--green);}
+.br-tr{top:9px;right:9px;border-top:2px solid var(--green);border-right:2px solid var(--green);}
+.br-bl{bottom:9px;left:9px;border-bottom:2px solid var(--green);border-left:2px solid var(--green);}
+.br-br{bottom:9px;right:9px;border-bottom:2px solid var(--green);border-right:2px solid var(--green);}
+.live-hud{position:absolute;bottom:8px;left:0;right:0;z-index:6;display:flex;gap:5px;justify-content:center;flex-wrap:wrap;padding:0 8px;}
+.hchip{background:rgba(7,7,15,.88);border:1px solid var(--bd);border-radius:5px;padding:3px 7px;display:flex;flex-direction:column;align-items:center;gap:1px;}
+.hchip-lbl{font-size:7px;color:var(--muted);letter-spacing:1px;}
+.hchip-val{font-family:var(--fh);font-size:15px;font-weight:700;line-height:1;}
+.flash-ov{position:absolute;inset:0;z-index:15;background:rgba(255,255,255,.65);pointer-events:none;opacity:0;}
+.loading-ov{position:absolute;inset:0;z-index:20;background:rgba(7,7,15,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
+.spinner{width:38px;height:38px;border:3px solid var(--bd);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-txt{font-size:11px;color:var(--green);letter-spacing:2px;}
+
+/* COUNTDOWN OVERLAY */
+.cnt-ov{position:absolute;inset:0;z-index:18;background:rgba(7,7,15,.75);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;display:none;}
+.cnt-num{font-family:var(--fh);font-size:120px;font-weight:700;color:var(--green);text-shadow:0 0 40px rgba(0,230,118,.6);line-height:1;}
+.cnt-lbl{font-size:12px;color:var(--muted);letter-spacing:3px;text-transform:uppercase;}
+
+/* CAM CONTROLS */
+.cam-controls{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--p1);border-bottom:1px solid var(--bd);flex-shrink:0;}
+.cam-switch-btn{background:var(--p2);border:1px solid var(--bd);color:var(--text);border-radius:6px;padding:7px 12px;font-family:var(--fm);font-size:10px;cursor:pointer;display:flex;align-items:center;gap:5px;}
+.cam-switch-btn:active{border-color:var(--cyan);}
+.instr-mini{font-size:10px;color:var(--muted);line-height:1.6;}
+
+/* INSTRUCTIONS */
+.instructions{padding:8px 14px;background:var(--p1);border-bottom:1px solid var(--bd);flex-shrink:0;}
+.instr-row{display:flex;align-items:flex-start;gap:7px;margin-bottom:4px;font-size:10px;color:var(--muted);line-height:1.5;}
+.instr-row:last-child{margin-bottom:0;}
+.instr-n{background:var(--orange);color:#000;border-radius:50%;width:15px;height:15px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;margin-top:1px;}
+
+.cam-bottom{padding:10px 14px;background:var(--bg);flex-shrink:0;}
+
+/* RESULT */
+.tab-row{display:flex;gap:0;border-bottom:1px solid var(--bd);flex-shrink:0;}
+.tab-btn{flex:1;border:none;background:none;color:var(--muted);font-family:var(--fm);font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:10px 4px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;}
+.tab-btn.on{color:var(--green);border-bottom-color:var(--green);}
+.result-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px 90px;}
+.result-scroll::-webkit-scrollbar{width:2px;}
+.result-scroll::-webkit-scrollbar-thumb{background:var(--bd);}
+
+.score-section{display:flex;align-items:center;gap:14px;background:var(--p1);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px;}
+.score-ring{position:relative;width:100px;height:100px;flex-shrink:0;}
+.score-ring svg{transform:rotate(-90deg);}
+.sr-track{fill:none;stroke:var(--p3);stroke-width:9;}
+.sr-fill{fill:none;stroke-width:9;stroke-linecap:round;stroke-dasharray:282.7;stroke-dashoffset:282.7;transition:stroke-dashoffset 1.2s ease,stroke .3s;}
+.score-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.score-num{font-family:var(--fh);font-size:34px;font-weight:700;line-height:1;}
+.score-grade{font-size:8px;color:var(--muted);letter-spacing:2px;margin-top:1px;}
+.score-right{flex:1;}
+.score-title{font-family:var(--fh);font-size:18px;font-weight:700;margin-bottom:5px;}
+
+.sec-title{font-size:9px;color:var(--muted);letter-spacing:3px;text-transform:uppercase;margin:14px 0 7px;}
+.metric-card{background:var(--p1);border:1px solid var(--bd);border-radius:8px;padding:11px;margin-bottom:7px;display:flex;align-items:center;gap:10px;}
+.metric-left{flex:1;}
+.metric-name{font-size:12px;font-weight:600;margin-bottom:3px;color:var(--text);}
+.metric-bar{height:4px;background:var(--p3);border-radius:2px;overflow:hidden;margin-bottom:3px;}
+.metric-bar-fill{height:100%;border-radius:2px;transition:width .7s ease;}
+.metric-ref{font-size:8px;color:var(--muted);}
+.metric-right{text-align:right;flex-shrink:0;}
+.metric-val{font-family:var(--fh);font-size:22px;font-weight:700;line-height:1;}
+.metric-unit{font-size:8px;color:var(--muted);}
+.metric-status{font-size:8px;padding:2px 5px;border-radius:3px;margin-top:2px;display:inline-block;}
+
+.diag-card{background:var(--p1);border:1px solid var(--bd);border-radius:8px;padding:13px;margin-bottom:8px;}
+.diag-item{font-size:11px;color:#ccc;line-height:1.85;margin-bottom:9px;padding-bottom:9px;border-bottom:1px solid var(--bd);}
+.diag-item:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none;}
+
+.ex-card{background:var(--p1);border:1px solid var(--bd);border-radius:10px;padding:13px;margin-bottom:9px;}
+.ex-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;}
+.ex-num{font-size:8px;color:var(--muted);letter-spacing:1px;}
+.ex-level-badge{font-size:8px;padding:2px 7px;border-radius:3px;}
+.ex-name{font-family:var(--fh);font-size:17px;font-weight:700;margin-bottom:8px;line-height:1.2;}
+.ex-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px;}
+.ex-meta{background:var(--p2);border-radius:5px;padding:6px 8px;}
+.ex-meta-lbl{font-size:7px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:1px;}
+.ex-meta-val{font-size:11px;font-weight:600;color:var(--text);}
+.ex-cue{background:#090912;border-radius:6px;padding:9px 10px;border-left:2px solid var(--orange);}
+.ex-cue-lbl{font-size:8px;color:var(--orange);letter-spacing:1px;margin-bottom:3px;text-transform:uppercase;}
+.ex-cue-txt{font-size:11px;color:#ccc;line-height:1.7;}
+
+.week-card{background:var(--p1);border:1px solid var(--bd);border-radius:8px;padding:11px;margin-bottom:7px;}
+.week-lbl{font-size:9px;color:var(--green);letter-spacing:2px;margin-bottom:2px;text-transform:uppercase;}
+.week-title{font-family:var(--fh);font-size:15px;font-weight:700;margin-bottom:2px;}
+.week-desc{font-size:10px;color:var(--muted);}
+
+.freq-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:14px;}
+.freq-item{background:var(--p1);border:1px solid var(--bd);border-radius:8px;padding:9px;text-align:center;}
+.freq-zone{font-family:var(--fh);font-size:14px;font-weight:700;color:var(--green);margin-bottom:2px;}
+.freq-time{font-size:11px;color:var(--yellow);margin-bottom:1px;}
+.freq-desc{font-size:9px;color:var(--muted);}
+
+.action-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(7,7,15,.97);border-top:1px solid var(--bd);padding:9px 13px calc(env(safe-area-inset-bottom,5px)+5px);display:flex;gap:7px;z-index:50;}
+.action-btn{flex:1;padding:12px;border:none;border-radius:8px;font-family:var(--fh);font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:all .12s;text-transform:uppercase;}
+.action-btn:active{transform:scale(.96);}
+.btn-green{background:var(--green);color:#000;}
+.btn-ghost{background:var(--p2);border:1px solid var(--bd);color:var(--text);}
+.btn-cyan{background:rgba(0,229,255,.1);border:1px solid var(--cyan);color:var(--cyan);}
+
+.no-issues{text-align:center;padding:22px;color:var(--green);font-size:14px;line-height:1.9;}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- HOME -->
+<div class="screen active" id="homeScreen">
+  <div class="home-logo">POSTURE<span>LAB</span> <span style="font-size:16px;color:var(--muted);">PRO</span></div>
+  <div class="home-sub">Bilimsel Postur Analizi &amp; Rehabilitasyon</div>
+  <div class="home-card">
+    <div class="home-icon">&#129469;</div>
+    <div class="home-title">Yapay Zeka Destekli<br>Postur Degerlendirmesi</div>
+    <div class="home-desc">MediaPipe Pose teknolojisi ile gercek zamanli iskelet analizi.<br>7 bilimsel metrik &bull; Klinik yorum &bull; Kisisel egzersiz programi.</div>
+    <div class="badges">
+      <span class="badge">Bas Durusu</span>
+      <span class="badge">Omuz Simetrisi</span>
+      <span class="badge">Kalca Hizasi</span>
+      <span class="badge">Diz Acisi</span>
+      <span class="badge">Govde Egimi</span>
+      <span class="badge">Sol/Sag Fark</span>
+      <span class="badge">Genel Skor</span>
+    </div>
+    <button class="big-btn" onclick="goCamera()">&#128247; ANALIZE BASLA</button>
+    <div class="home-hint">Safari gerekli &bull; Kameradan 2-3m uzaklas &bull; Tam vucut gorunsun</div>
+  </div>
+</div>
+
+<!-- CAMERA -->
+<div class="screen" id="cameraScreen">
+  <div class="hdr">
+    <button class="back-btn" onclick="goHome()">&#8592; Geri</button>
+    <div class="hdr-title">CANLI ANALIZ</div>
+    <div class="status-row">
+      <div class="sdot" id="camDot"></div>
+      <span class="stext" id="camStatus">YUKLENIYOR</span>
+    </div>
+  </div>
+
+  <div class="cam-controls">
+    <button class="cam-switch-btn" onclick="switchCamera()">&#128259; Kamera: <span id="camFaceLabel">ON</span></button>
+    <div class="instr-mini">2-3m uzaklas &bull; Tam vucut gorunsun</div>
+  </div>
+
+  <div class="cam-wrap" id="camWrap">
+    <video id="camVideo" playsinline autoplay muted></video>
+    <canvas id="camCanvas"></canvas>
+    <div class="br br-tl"></div><div class="br br-tr"></div>
+    <div class="br br-bl"></div><div class="br br-br"></div>
+    <div class="live-hud" id="liveHud"></div>
+    <div class="flash-ov" id="flashOv"></div>
+    <div class="cnt-ov" id="cntOv">
+      <div class="cnt-num" id="cntNum">5</div>
+      <div class="cnt-lbl">Hareketsiz Dur</div>
+    </div>
+    <div class="loading-ov" id="loadingOv">
+      <div class="spinner"></div>
+      <div class="loading-txt">POSE MODELI YUKLENIYOR</div>
+    </div>
+  </div>
+
+  <div class="instructions">
+    <div class="instr-row"><div class="instr-n">1</div><span>Kameradan <strong style="color:var(--text)">2-3 metre</strong> uzaklas, bas ve ayaklar cercevede olsun</span></div>
+    <div class="instr-row"><div class="instr-n">2</div><span>Dogal dik durusunu al, kollar yanda. Iskelet cizilince hazirsin.</span></div>
+    <div class="instr-row"><div class="instr-n">3</div><span>"Analiz Et" bas &#8594; <strong style="color:var(--green)">5 saniye</strong> hareketsiz dur &#8594; otomatik olcum</span></div>
+  </div>
+
+  <div class="cam-bottom">
+    <button class="big-btn" id="analyzeBtn" onclick="startAnalyze()" disabled>&#9203; Pose Bekleniyor</button>
+  </div>
+</div>
+
+<!-- RESULT -->
+<div class="screen" id="resultScreen">
+  <div class="hdr">
+    <button class="back-btn" onclick="goCamera()">&#8592; Tekrar</button>
+    <div class="hdr-title">POSTUR RAPORU</div>
+    <button class="back-btn" onclick="goHome()">&#127968;</button>
+  </div>
+  <div class="tab-row">
+    <button class="tab-btn on" onclick="showTab('report',this)">&#128202; Rapor</button>
+    <button class="tab-btn" onclick="showTab('program',this)">&#128170; Program</button>
+  </div>
+
+  <div id="tab-report" class="result-scroll">
+    <div class="score-section">
+      <div class="score-ring">
+        <svg width="100" height="100" viewBox="0 0 100 100">
+          <circle class="sr-track" cx="50" cy="50" r="45"/>
+          <circle class="sr-fill" id="srFill" cx="50" cy="50" r="45"/>
+        </svg>
+        <div class="score-center">
+          <div class="score-num" id="scoreNum">-</div>
+          <div class="score-grade" id="scoreGrade">-</div>
+        </div>
+      </div>
+      <div class="score-right">
+        <div class="score-title">Postur Skoru</div>
+        <div id="scoreIssues" style="font-size:11px;line-height:1.9;"></div>
+      </div>
+    </div>
+    <div class="sec-title">OLCUM METRIKLERI</div>
+    <div id="metricsArea"></div>
+    <div class="sec-title" id="diagTitle" style="display:none">KLINIK YORUM</div>
+    <div id="diagArea"></div>
+  </div>
+
+  <div id="tab-program" class="result-scroll" style="display:none">
+    <div class="sec-title">8 HAFTALIK PERIODIZASYON</div>
+    <div class="week-card"><div class="week-lbl">1-2. Hafta</div><div class="week-title">Farkindalik ve Aktivasyon</div><div class="week-desc">Zayif kaslari uyandır, gergin kaslari uzat. Dusuk yogunluklu baslangic.</div></div>
+    <div class="week-card"><div class="week-lbl">3-4. Hafta</div><div class="week-title">Stabilizasyon</div><div class="week-desc">Notr pozisyon benimsenir, core stabilizasyon vurgulanir.</div></div>
+    <div class="week-card"><div class="week-lbl">5-8. Hafta</div><div class="week-title">Guclendirme ve Transfer</div><div class="week-desc">Fonksiyonel hareketlere entegrasyon, yuk artisi saglanir.</div></div>
+    <div class="sec-title">UYGULAMA SIKLIGI</div>
+    <div class="freq-grid">
+      <div class="freq-item"><div class="freq-zone">Sabah</div><div class="freq-time">5-10 dk</div><div class="freq-desc">Germe &amp; mobilite</div></div>
+      <div class="freq-item"><div class="freq-zone">Antrenman</div><div class="freq-time">20-30 dk</div><div class="freq-desc">Guclendirme</div></div>
+      <div class="freq-item"><div class="freq-zone">Aksam</div><div class="freq-time">5 dk</div><div class="freq-desc">Nefes &amp; relaks</div></div>
+    </div>
+    <div class="sec-title" id="exSectionTitle">EGZERSIZLER</div>
+    <div id="exArea"></div>
+  </div>
+
+  <div class="action-bar">
+    <button class="action-btn btn-ghost" onclick="goCamera()">&#128247; Tekrar Olc</button>
+    <button class="action-btn btn-cyan" onclick="genPDF()">&#128196; PDF Rapor</button>
+  </div>
+</div>
+
+</div>
+
+<script>
+'use strict';
+
+// NORMS
+var NORMS = {
+  headForward:  {label:'Bas Ileriye Uzanma',   unit:'cm', ideal:0,   warn:2.5, bad:5,   ref:'Kendall 2005',   dir:'low'},
+  shoulderTilt: {label:'Omuz Egim Farki',       unit:'deg',ideal:0,   warn:1.5, bad:3,   ref:'Sahrmann 2002',  dir:'low'},
+  hipTilt:      {label:'Kalca Hizasi Farki',    unit:'deg',ideal:0,   warn:1.5, bad:3,   ref:'Page 2010',      dir:'low'},
+  lKnee:        {label:'Sol Diz Acisi',         unit:'deg',ideal:180, warn:172, bad:165, ref:'Powers 2010',    dir:'high'},
+  rKnee:        {label:'Sag Diz Acisi',         unit:'deg',ideal:180, warn:172, bad:165, ref:'Powers 2010',    dir:'high'},
+  trunkLat:     {label:'Govde Lateral Egimi',   unit:'deg',ideal:0,   warn:2,   bad:4,   ref:'Comerford 2012', dir:'low'},
+  symmetry:     {label:'Sol/Sag Simetri',       unit:'%',  ideal:100, warn:90,  bad:80,  ref:'Zifchock 2008',  dir:'high'}
+};
+
+// EXERCISES
+var EX = {
+  headForward: [
+    {name:'Derin Servikal Fleksor Aktivasyonu', sets:'3x10', rest:'60sn', level:'Baslangic', muscle:'Derin boyun fleksorleri', cue:'Cene hafifce ice cekilir, bas geriye kayar. Boyun kaslari gevses.', ref:'Jull 2008'},
+    {name:'Pektoral Germe (Kapi Germesi)',      sets:'3x30sn',rest:'30sn',level:'Baslangic', muscle:'Pectoralis major/minor',  cue:'Kollar 90 derece acıyla kapi kasasına, gogus one-yukari doğru acilir.', ref:'Kisner 2012'},
+    {name:'Scapular Retraksiyon (Band)',         sets:'3x15', rest:'60sn', level:'Orta',      muscle:'Orta trapez, romboidler', cue:'Kurek kemikleri birbirine yaklasir, boyun ve omuz notr kalir.', ref:'Cools 2007'}
+  ],
+  shoulderTilt: [
+    {name:'Tek Tarafli Ust Trapez Germesi',      sets:'3x30sn',rest:'30sn',level:'Baslangic', muscle:'Ust trapez (yuksek taraf)',cue:'Bas karsi yone hafifce egilir, el kalcanin arkasinda tutulur.', ref:'Sahrmann 2002'},
+    {name:'Serratus Anterior Aktivasyonu',        sets:'3x12', rest:'60sn', level:'Orta',      muscle:'Serratus anterior',       cue:'Wall push-up plus: son pozisyonda kurek kemigi one itilir.', ref:'Cools 2007'},
+    {name:'Alt Trapez Guclendirme (Y Hareketi)', sets:'3x10', rest:'60sn', level:'Ileri',     muscle:'Alt trapez',               cue:'Yuzustu pozisyon, kollar Y seklinde yukari kalkar, omuz kulaga yaklasmasin.', ref:'Cools 2007'}
+  ],
+  hipTilt: [
+    {name:'Iliopsoas Germesi (Kosucu Pozisyonu)',sets:'3x45sn',rest:'30sn',level:'Baslangic',muscle:'Iliopsoas',          cue:'Ondeki diz 90 derece, kalca one-asagi dogru baski uygulanir.',ref:'Page 2010'},
+    {name:'Clamshell (Kalca Abduktoru)',          sets:'3x15', rest:'60sn', level:'Baslangic',muscle:'Gluteus medius',     cue:'Yan yatarak ust diz acilir, kalca geriye donmez.', ref:'Distefano 2009'},
+    {name:'Tek Bacak Romanian Deadlift',          sets:'3x8',  rest:'90sn', level:'Ileri',    muscle:'Glut max, hamstring',cue:'Govde ve arka bacak duz cizgide, kalca notr tutulur.', ref:'Distefano 2009'}
+  ],
+  kneeValgus: [
+    {name:'Terminal Knee Extension (TKE)',  sets:'3x15',rest:'60sn',level:'Baslangic',muscle:'Vastus medialis oblique',   cue:'Band direnciyle son 15 derece diz ekstansiyonu, VMO kontraksiyonu hissedilmeli.', ref:'Powers 2010'},
+    {name:'Band ile Squat (Dis Rotasyon)', sets:'3x10',rest:'90sn',level:'Orta',      muscle:'Glut med, dis rotatorlar', cue:'Dizler ayak ikinci parmagi hizasinda tutulur, ice kacmaya izin verilmez.', ref:'Powers 2010'},
+    {name:'Bulgarian Split Squat',          sets:'3x8', rest:'90sn',level:'Ileri',    muscle:'Quadriceps, gluteus maximus',cue:'Arka ayak yuksekte, on diz topuk hizasini gecmez.', ref:'Distefano 2009'}
+  ],
+  trunkLat: [
+    {name:'Side Plank',              sets:'3x25sn',rest:'60sn',level:'Baslangic',muscle:'Quadratus lumborum, obliques',        cue:'Kalca zemine dusmez, govde yan cizgide duz tutulur.', ref:'McGill 2010'},
+    {name:'Paloff Press',            sets:'3x10', rest:'60sn', level:'Orta',    muscle:'Transversus abdominis, obliques',     cue:'Gobek ice cekilir, omurgada rotasyon engellenir.', ref:'McGill 2010'},
+    {name:'Tek El Farmers Carry',   sets:'3x20m',rest:'90sn', level:'Ileri',   muscle:'Quadratus lumborum, latissimus dorsi',cue:'Omuz seviyeleri esit, adim kontrollı ve guclu.', ref:'Comerford 2012'}
+  ]
+};
+
+// STATE
+var poseInst=null, camInst=null, camReady=false, poseReady=false;
+var lastLm=null, lastResult=null;
+var camFacing='environment'; // 'environment'=arka, 'user'=on
+var countdownTimer=null;
+
+// SCREEN NAV
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  document.getElementById(id).classList.add('active');
+}
+function goHome(){
+  if(camInst){try{camInst.stop();}catch(e){} camInst=null;}
+  camReady=false; poseReady=false; lastLm=null;
+  if(countdownTimer){clearInterval(countdownTimer); countdownTimer=null;}
+  showScreen('homeScreen');
+}
+function goCamera(){showScreen('cameraScreen');if(!camReady)initCamera();}
+function goResult(){showScreen('resultScreen');}
+
+// TABS
+function showTab(id,el){
+  document.getElementById('tab-report').style.display='none';
+  document.getElementById('tab-program').style.display='none';
+  document.getElementById('tab-'+id).style.display='block';
+  document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('on');});
+  el.classList.add('on');
+}
+
+// CAMERA
+function setWrapH(){
+  var wrap=document.getElementById('camWrap');
+  if(wrap) wrap.style.height=Math.round(window.innerWidth*0.72)+'px';
+}
+
+async function initCamera(){
+  setWrapH();
+  document.getElementById('loadingOv').style.display='flex';
+  setCamUI('warn','YUKLENIYOR');
+  try{
+    if(!poseInst){
+      poseInst=new Pose({locateFile:function(f){return 'https://cdn.jsdelivr.net/npm/@mediapipe/pose/'+f;}});
+      poseInst.setOptions({modelComplexity:1,smoothLandmarks:true,minDetectionConfidence:0.55,minTrackingConfidence:0.5});
+      poseInst.onResults(onPoseResults);
+    }
+    if(camInst){try{camInst.stop();}catch(e){}}
+    var video=document.getElementById('camVideo');
+    // Mirror only front cam
+    video.style.transform = camFacing==='user' ? 'scaleX(-1)' : 'none';
+    document.getElementById('camCanvas').style.transform = camFacing==='user' ? 'scaleX(-1)' : 'none';
+
+    camInst=new Camera(video,{
+      onFrame:async function(){if(poseInst)await poseInst.send({image:video});},
+      width:640,height:480,
+      facingMode:camFacing
+    });
+    await camInst.start();
+    camReady=true;
+    document.getElementById('loadingOv').style.display='none';
+    setCamUI('warn','POSE BEKLENIYOR');
+  }catch(e){
+    document.getElementById('loadingOv').style.display='none';
+    setCamUI('','HATA');
+    alert('Kamera acilamadi.\n\nSafari kullanin\nAyarlar > Safari > Kamera > Izin Ver\nSayfayi yenileyin');
+  }
+}
+
+function switchCamera(){
+  camFacing = camFacing==='environment' ? 'user' : 'environment';
+  document.getElementById('camFaceLabel').textContent = camFacing==='environment' ? 'ARKA' : 'ON';
+  camReady=false; poseReady=false; lastLm=null;
+  var btn=document.getElementById('analyzeBtn');
+  btn.disabled=true; btn.textContent='Pose Bekleniyor';
+  if(camInst){try{camInst.stop();}catch(e){} camInst=null;}
+  initCamera();
+}
+
+function setCamUI(dotClass,text){
+  var dot=document.getElementById('camDot');
+  dot.className='sdot'+(dotClass?' '+dotClass:'');
+  document.getElementById('camStatus').textContent=text;
+}
+
+// POSE
+function onPoseResults(res){
+  if(!res.poseLandmarks) return;
+  var lm=res.poseLandmarks;
+  lastLm=lm;
+  if(!poseReady){
+    poseReady=true;
+    setCamUI('ok','POSE HAZIR');
+    var btn=document.getElementById('analyzeBtn');
+    btn.disabled=false;
+    btn.textContent='Analiz Et (5sn geri sayim)';
+  }
+  var cvs=document.getElementById('camCanvas');
+  var W=cvs.width=res.image.width;
+  var H=cvs.height=res.image.height;
+  var ctx=cvs.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  if(window.drawConnectors&&window.POSE_CONNECTIONS)
+    drawConnectors(ctx,lm,POSE_CONNECTIONS,{color:'rgba(0,230,118,.55)',lineWidth:2});
+  if(window.drawLandmarks)
+    drawLandmarks(ctx,lm,{color:'#00e5ff',fillColor:'rgba(0,229,255,.35)',radius:4,lineWidth:1.5});
+  [11,12,23,24,25,26,27,28].forEach(function(i){
+    if(!lm[i])return;
+    ctx.beginPath();ctx.arc(lm[i].x*W,lm[i].y*H,7,0,Math.PI*2);
+    ctx.strokeStyle='#ff6d00';ctx.lineWidth=2.5;ctx.stroke();
+  });
+  // Ground line
+  var lA=lm[27],rA=lm[28];
+  if(lA&&rA){
+    var gy=((lA.y+rA.y)/2)*H;
+    ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);
+    ctx.strokeStyle='rgba(0,230,118,.3)';ctx.lineWidth=1.5;
+    ctx.setLineDash([6,5]);ctx.stroke();ctx.setLineDash([]);
+  }
+  // Live HUD
+  var a=calcPosture(lm);
+  var c1=sColor(a.lKnee,NORMS.lKnee);
+  var c2=sColor(a.rKnee,NORMS.rKnee);
+  var c3=sColor(a.symmetry,NORMS.symmetry);
+  var c4=scoreColor(a.score);
+  document.getElementById('liveHud').innerHTML=
+    hchip('L-DIZ',a.lKnee+'d',c1)+hchip('R-DIZ',a.rKnee+'d',c2)+
+    hchip('SIMETRI',a.symmetry+'%',c3)+hchip('SKOR',a.score,c4);
+}
+
+function hchip(lbl,val,color){
+  return '<div class="hchip"><span class="hchip-lbl">'+lbl+'</span><span class="hchip-val" style="color:'+color+'">'+val+'</span></div>';
+}
+
+// CALC
+function ang(A,B,C){
+  if(!A||!B||!C)return 0;
+  var ax=A.x-B.x,ay=A.y-B.y,bx=C.x-B.x,by=C.y-B.y;
+  var dot=ax*bx+ay*by;
+  var mag=Math.sqrt(ax*ax+ay*ay)*Math.sqrt(bx*bx+by*by);
+  if(!mag)return 0;
+  return Math.round(Math.acos(Math.max(-1,Math.min(1,dot/mag)))*180/Math.PI);
+}
+
+function calcPosture(lm){
+  var lEar=lm[7],lSh=lm[11],rSh=lm[12];
+  var lHip=lm[23],rHip=lm[24],lKnee=lm[25],rKnee=lm[26],lAnk=lm[27],rAnk=lm[28];
+  var headForward  = lEar&&lSh ? Math.round(Math.abs(lEar.x-lSh.x)*100) : 0;
+  var shoulderTilt = lSh&&rSh  ? Math.round(Math.abs(lSh.y-rSh.y)*1000)/10 : 0;
+  var hipTilt      = lHip&&rHip? Math.round(Math.abs(lHip.y-rHip.y)*1000)/10 : 0;
+  var lKneeA=ang(lHip,lKnee,lAnk);
+  var rKneeA=ang(rHip,rKnee,rAnk);
+  var mSh=lSh&&rSh?(lSh.x+rSh.x)/2:0.5;
+  var mHip=lHip&&rHip?(lHip.x+rHip.x)/2:0.5;
+  var trunkLat=Math.round(Math.abs(mSh-mHip)*100);
+  var symRaw=100-Math.abs(lKneeA-rKneeA)*2-shoulderTilt*3-hipTilt*3;
+  var symmetry=Math.max(0,Math.min(100,Math.round(symRaw)));
+  var score=100;
+  if(headForward>2.5)  score-=(headForward-2.5)*4;
+  if(shoulderTilt>1.5) score-=(shoulderTilt-1.5)*5;
+  if(hipTilt>1.5)      score-=(hipTilt-1.5)*5;
+  if(lKneeA<172)       score-=(172-lKneeA)*0.8;
+  if(rKneeA<172)       score-=(172-rKneeA)*0.8;
+  if(trunkLat>2)       score-=(trunkLat-2)*3;
+  score=Math.max(0,Math.min(100,Math.round(score)));
+  return{headForward:headForward,shoulderTilt:shoulderTilt,hipTilt:hipTilt,lKnee:lKneeA,rKnee:rKneeA,trunkLat:trunkLat,symmetry:symmetry,score:score};
+}
+
+// ANALYZE WITH 5s COUNTDOWN
+function startAnalyze(){
+  if(!lastLm){alert('Vucut tespit edilemedi. Biraz geri cekil.');return;}
+  var btn=document.getElementById('analyzeBtn');
+  btn.disabled=true;
+  var cntOv=document.getElementById('cntOv');
+  var cntNum=document.getElementById('cntNum');
+  cntOv.style.display='flex';
+  var n=5;
+  cntNum.textContent=n;
+  countdownTimer=setInterval(function(){
+    n--;
+    if(n>0){
+      cntNum.textContent=n;
+    } else {
+      clearInterval(countdownTimer); countdownTimer=null;
+      cntOv.style.display='none';
+      // Flash
+      var fl=document.getElementById('flashOv');
+      fl.style.opacity='1';
+      setTimeout(function(){fl.style.opacity='0';},250);
+      // Take reading
+      if(!lastLm){alert('Vucut tespit edilemedi.');btn.disabled=false;btn.textContent='Analiz Et (5sn geri sayim)';return;}
+      lastResult=calcPosture(lastLm);
+      renderResult(lastResult);
+      goResult();
+      btn.disabled=false;
+      btn.textContent='Analiz Et (5sn geri sayim)';
+    }
+  },1000);
+}
+
+// RENDER RESULT
+function scoreColor(s){return s>=85?'var(--green)':s>=65?'var(--yellow)':'var(--red)';}
+function getStatus(v,n){
+  if(n.dir==='low') return v<=n.ideal?'Normal':v<=n.warn?'Dikkat':'Sorunlu';
+  return v>=n.ideal?'Normal':v>=n.warn?'Dikkat':'Sorunlu';
+}
+function sColor(v,n){
+  var s=getStatus(v,n);
+  return s==='Normal'?'var(--green)':s==='Dikkat'?'var(--yellow)':'var(--red)';
+}
+
+function renderResult(r){
+  var color=scoreColor(r.score);
+  var grade=r.score>=85?'MUKEMMEL':r.score>=70?'IYI':r.score>=55?'ORTA':'GELISTIR';
+  var circ=282.7;
+  document.getElementById('srFill').style.strokeDashoffset=circ-(r.score/100)*circ;
+  document.getElementById('srFill').style.stroke=color;
+  document.getElementById('scoreNum').textContent=r.score;
+  document.getElementById('scoreNum').style.color=color;
+  document.getElementById('scoreGrade').textContent=grade;
+
+  var issues=[
+    r.headForward>2.5  && 'Bas ileriye uzanma',
+    r.shoulderTilt>1.5 && 'Omuz asimetrisi',
+    r.hipTilt>1.5      && 'Kalca hizasi bozuklugu',
+    (r.lKnee<172||r.rKnee<172) && 'Diz valgus',
+    r.trunkLat>2       && 'Govde lateral egimi'
+  ].filter(Boolean);
+
+  document.getElementById('scoreIssues').innerHTML = issues.length===0
+    ? '<span style="color:var(--green);font-size:12px;">Tum metrikler normal sinirlar icinde!</span>'
+    : issues.map(function(i){return '<div style="color:#ccc;font-size:11px;">&#9888; '+i+'</div>';}).join('');
+
+  // Metrics
+  var mkeys=[
+    {k:'headForward',v:r.headForward},{k:'shoulderTilt',v:r.shoulderTilt},
+    {k:'hipTilt',v:r.hipTilt},{k:'lKnee',v:r.lKnee},{k:'rKnee',v:r.rKnee},
+    {k:'trunkLat',v:r.trunkLat},{k:'symmetry',v:r.symmetry}
+  ];
+  document.getElementById('metricsArea').innerHTML=mkeys.map(function(mk){
+    var n=NORMS[mk.k]; var v=mk.v;
+    var st=getStatus(v,n); var c=sColor(v,n);
+    var pct=n.dir==='low'?Math.max(0,100-Math.min((v/(n.bad*1.5))*100,100)):Math.min(100,(v/n.ideal)*100);
+    return '<div class="metric-card"><div class="metric-left"><div class="metric-name">'+n.label+'</div><div class="metric-bar"><div class="metric-bar-fill" style="width:'+pct+'%;background:'+c+';"></div></div><div class="metric-ref">Kaynak: '+n.ref+'</div></div><div class="metric-right"><div class="metric-val" style="color:'+c+'">'+v+'</div><div class="metric-unit">'+n.unit+'</div><div class="metric-status" style="background:'+c+'22;color:'+c+';">'+st.toUpperCase()+'</div></div></div>';
+  }).join('');
+
+  // Diagnosis
+  var diags=[
+    r.headForward>2.5  && '<div class="diag-item"><strong style="color:var(--yellow)">Bas Ileriye Uzanma:</strong> Servikal lordoz artisi ve boyun fleksoru zayifligiyla iliskilidir. Kronik boyun agrisi ve bas agrisi riski artmaktadir. Uzun sureli ekran kullanimi basica risk faktoru olarak degerlendirilmektedir (Kendall, 2005).</div>',
+    r.shoulderTilt>1.5 && '<div class="diag-item"><strong style="color:var(--yellow)">Omuz Asimetrisi:</strong> Ust capraz sendrom bulgulariyla uyumludur. Pektoral kaslarda kisalma ve romboid/orta trapez kaslarinda zayiflik soz konusu olabilir. Rotator cuff yaralanmasi riskini artirabilir (Sahrmann, 2002).</div>',
+    r.hipTilt>1.5      && '<div class="diag-item"><strong style="color:var(--yellow)">Kalca Hizasi Bozuklugu:</strong> Alt capraz sendromla uyumlu bulgular icermektedir. Iliopsoas kasinda kisalma ve gluteus medius kasinda zayiflik tipik bulgular arasindadir. Bel agrisi ve IT band sendromuyla iliskili olabilir (Page, 2010).</div>',
+    (r.lKnee<172||r.rKnee<172) && '<div class="diag-item"><strong style="color:var(--red)">Diz Valgus:</strong> Femoral ic rotasyon ve ayak pronasyon zinciri gozlemlenebilir. Patellofemoral agri sendromu ve ACL yaralanma riski artmistir (Powers, 2010).</div>',
+    r.trunkLat>2       && '<div class="diag-item"><strong style="color:var(--yellow)">Govde Lateral Egimi:</strong> Quadratus lumborum asimetrisi veya tek tarafli kalca abduktor zayifligiyla iliskili olabilir. Trendelenburg belirtisiyle ortusebilir (Comerford, 2012).</div>'
+  ].filter(Boolean);
+
+  if(diags.length>0){
+    document.getElementById('diagTitle').style.display='block';
+    document.getElementById('diagArea').innerHTML='<div class="diag-card">'+diags.join('')+'</div>';
+  } else {
+    document.getElementById('diagTitle').style.display='none';
+    document.getElementById('diagArea').innerHTML='';
+  }
+  renderProgram(r);
+}
+
+function renderProgram(r){
+  var prog=[]; var seen={};
+  function add(arr){arr.forEach(function(e){if(!seen[e.name]){seen[e.name]=true;prog.push(e);}});}
+  if(r.headForward>2.5)  add(EX.headForward);
+  if(r.shoulderTilt>1.5) add(EX.shoulderTilt);
+  if(r.hipTilt>1.5)      add(EX.hipTilt);
+  if(r.lKnee<172||r.rKnee<172) add(EX.kneeValgus);
+  if(r.trunkLat>2)       add(EX.trunkLat);
+  document.getElementById('exSectionTitle').textContent='EGZERSIZLER ('+prog.length+' ADET)';
+  if(prog.length===0){document.getElementById('exArea').innerHTML='<div class="no-issues">Posturun mukemmel!<br>Koruyucu program olarak genel mobilite ve core stabilizasyon yeterlidir.</div>';return;}
+  function lc(l){return l==='Baslangic'?'rgba(0,230,118,.1)':l==='Orta'?'rgba(255,215,64,.1)':'rgba(255,82,82,.1)';}
+  function lt(l){return l==='Baslangic'?'var(--green)':l==='Orta'?'var(--yellow)':'var(--red)';}
+  document.getElementById('exArea').innerHTML=prog.map(function(ex,i){
+    return '<div class="ex-card"><div class="ex-header"><span class="ex-num">'+(i+1)+'/'+prog.length+'</span><span class="ex-level-badge" style="background:'+lc(ex.level)+';color:'+lt(ex.level)+';">'+ex.level.toUpperCase()+'</span></div><div class="ex-name">'+ex.name+'</div><div class="ex-grid"><div class="ex-meta"><div class="ex-meta-lbl">Set x Tekrar</div><div class="ex-meta-val">'+ex.sets+'</div></div><div class="ex-meta"><div class="ex-meta-lbl">Dinlenme</div><div class="ex-meta-val">'+ex.rest+'</div></div><div class="ex-meta"><div class="ex-meta-lbl">Kas Grubu</div><div class="ex-meta-val">'+ex.muscle+'</div></div><div class="ex-meta"><div class="ex-meta-lbl">Literatur</div><div class="ex-meta-val">'+ex.ref+'</div></div></div><div class="ex-cue"><div class="ex-cue-lbl">Teknik Cue</div><div class="ex-cue-txt">'+ex.cue+'</div></div></div>';
+  }).join('');
+}
+
+// PDF - PRO FORMAT
+function genPDF(){
+  if(!lastResult){alert('Once analiz yapin.');return;}
+  var r=lastResult;
+  var jsPDF=window.jspdf.jsPDF;
+  var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  var W=210; var margin=18; var y=0;
+  var grade=r.score>=85?'Mukemmel':r.score>=70?'Iyi':r.score>=55?'Orta':'Gelistirilmeli';
+
+  // ── HEADER ──────────────────────────────────────────────
+  doc.setFillColor(255,255,255); doc.rect(0,0,W,297,'F');
+  // Top color bar
+  doc.setFillColor(0,100,60); doc.rect(0,0,W,22,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold'); doc.setFontSize(16);
+  doc.text('PostureLab Pro',margin,10);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text('Bilimsel Postur Analiz Raporu',margin,16);
+  doc.setFontSize(8);
+  doc.text(new Date().toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'}),W-margin,16,{align:'right'});
+  y=30;
+
+  // ── SCORE BOX ───────────────────────────────────────────
+  var scoreC=r.score>=85?[0,150,80]:r.score>=65?[200,140,0]:[180,40,40];
+  doc.setFillColor(245,248,245); doc.roundedRect(margin,y,W-margin*2,22,2,2,'F');
+  doc.setFillColor(scoreC[0],scoreC[1],scoreC[2]); doc.roundedRect(margin,y,18,22,2,2,'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(16);
+  doc.text(String(r.score),margin+9,y+10,{align:'center'});
+  doc.setFontSize(7); doc.text('/100',margin+9,y+16,{align:'center'});
+  doc.setTextColor(30,30,30); doc.setFontSize(13); doc.setFont('helvetica','bold');
+  doc.text('Postur Skoru: '+grade,margin+22,y+10);
+  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+  var issueList=[
+    r.headForward>2.5&&'Bas ileriye uzanma',r.shoulderTilt>1.5&&'Omuz asimetrisi',
+    r.hipTilt>1.5&&'Kalca hizasi',r.lKnee<172&&'Diz valgus (Sol)',r.rKnee<172&&'Diz valgus (Sag)',r.trunkLat>2&&'Govde eğimi'
+  ].filter(Boolean);
+  doc.text(issueList.length===0?'Tum metrikler normal sinirlar icindedir.':'Tespit edilen bulgular: '+issueList.join(', '),margin+22,y+17);
+  y+=30;
+
+  // ── METRICS TABLE ────────────────────────────────────────
+  doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(0,100,60);
+  doc.text('1. Olcum Metrikleri',margin,y); y+=4;
+  doc.setDrawColor(0,100,60); doc.setLineWidth(0.3); doc.line(margin,y,W-margin,y); y+=4;
+
+  var metRows=[
+    ['Bas Ileriye Uzanma', r.headForward, 'cm', getStatus(r.headForward,NORMS.headForward), 'N: <2.5 cm', 'Kendall, 2005'],
+    ['Omuz Egim Farki',    r.shoulderTilt,'deg',getStatus(r.shoulderTilt,NORMS.shoulderTilt),'N: <1.5 deg','Sahrmann, 2002'],
+    ['Kalca Hizasi Farki', r.hipTilt,     'deg',getStatus(r.hipTilt,NORMS.hipTilt),          'N: <1.5 deg','Page, 2010'],
+    ['Sol Diz Acisi',      r.lKnee,       'deg',getStatus(r.lKnee,NORMS.lKnee),              'N: >172 deg','Powers, 2010'],
+    ['Sag Diz Acisi',      r.rKnee,       'deg',getStatus(r.rKnee,NORMS.rKnee),              'N: >172 deg','Powers, 2010'],
+    ['Govde Lateral Egimi',r.trunkLat,    'deg',getStatus(r.trunkLat,NORMS.trunkLat),        'N: <2 deg',  'Comerford, 2012'],
+    ['Sol/Sag Simetri',    r.symmetry,    '%',  getStatus(r.symmetry,NORMS.symmetry),        'N: >90%',    'Zifchock, 2008']
+  ];
+
+  doc.autoTable({
+    startY:y,
+    head:[['Metrik','Deger','Birim','Durum','Normal Deger','Kaynak']],
+    body:metRows,
+    styles:{fontSize:8,cellPadding:2.5,textColor:[40,40,40],fillColor:[255,255,255],lineColor:[220,220,220],lineWidth:0.2},
+    headStyles:{fillColor:[0,100,60],textColor:[255,255,255],fontStyle:'bold',fontSize:8},
+    columnStyles:{
+      0:{cellWidth:48},1:{cellWidth:16,halign:'center'},2:{cellWidth:14,halign:'center'},
+      3:{cellWidth:22,halign:'center',fontStyle:'bold'},4:{cellWidth:28},5:{cellWidth:28}
+    },
+    didParseCell:function(data){
+      if(data.section==='body'&&data.column.index===3){
+        var v=data.cell.raw;
+        if(v==='Normal')data.cell.styles.textColor=[0,130,70];
+        else if(v==='Dikkat')data.cell.styles.textColor=[180,130,0];
+        else data.cell.styles.textColor=[180,40,40];
+      }
+    },
+    margin:{left:margin,right:margin}
+  });
+  y=doc.lastAutoTable.finalY+8;
+
+  // ── CLINICAL ASSESSMENT ─────────────────────────────────
+  if(y>240){doc.addPage();y=20;}
+  doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(0,100,60);
+  doc.text('2. Klinik Degerlendirme',margin,y); y+=4;
+  doc.setDrawColor(0,100,60); doc.line(margin,y,W-margin,y); y+=5;
+
+  var clinicalItems=[
+    r.headForward>2.5  &&{title:'Bas Ileriye Uzanma (Forward Head Posture)',body:'Olculen bas ileriye uzanma degeri ('+r.headForward+' cm), normal sinirin (2.5 cm) uzerindedir. Bu bulgu, servikal lordoz artisi ve derin boyun fleksor kaslarda fonksiyonel zayiflikla uyumludur. Kronik boyun agrisi, basgelmesi ve temporomandibular eklem disfonksiyonu ile iliskilendirilmistir (Kendall ve ark., 2005; Jull ve ark., 2008).'},
+    r.shoulderTilt>1.5 &&{title:'Omuz Asimetrisi (Ust Capraz Sendrom)',body:'Omuz yuksekligi farki ('+r.shoulderTilt+' deg), normal sinirlarin uzerindedir. Ust capraz sendromla uyumlu bu tablo; pektoral ve ust trapez kaslarinda kisalma, romboid ve alt trapez kaslarinda zayiflik seklinde karakterize edilir (Sahrmann, 2002; Cools ve ark., 2007).'},
+    r.hipTilt>1.5      &&{title:'Kalca Hizasi Bozuklugu (Alt Capraz Sendrom)',body:'Kalca hizasi farki ('+r.hipTilt+' deg) normal degerlerin uzerindedir. Alt capraz sendromla uyumlu; iliopsoas ve rektus femoris kaslarinda kisalma, gluteus maksimus ve abdominallerde zayiflik beklenmektedir (Page ve ark., 2010).'},
+    (r.lKnee<172||r.rKnee<172)&&{title:'Diz Valgus (Patellofemoral Disfonksiyon Riski)',body:'Diz aci olcumleri (Sol: '+r.lKnee+' deg, Sag: '+r.rKnee+' deg) normal sinirin altindadir. Femoral ic rotasyon ve tibial dislokasyon paterni gozlemlenmektedir. Patellofemoral agri sendromu ve ACL yaralanma riski artmistir (Powers, 2010).'},
+    r.trunkLat>2       &&{title:'Govde Lateral Egimi (Quadratus Lumborum Asimetrisi)',body:'Govde lateral egimi ('+r.trunkLat+' deg) kabul edilebilir sinirin uzerindedir. Quadratus lumborum kasinda asimetri veya tek tarafli kalca abduktor zayifligiyla iliskili olabilir. Trendelenburg belirtisiyle ortusebilir (Comerford ve Mottram, 2012).'}
+  ].filter(Boolean);
+
+  if(clinicalItems.length===0){
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(0,130,70);
+    doc.text('Tum postur parametreleri normal sinirlar icindedir. Klinik olarak anlamli bir bulgu saptanmamistir.',margin,y,{maxWidth:W-margin*2}); y+=10;
+  } else {
+    clinicalItems.forEach(function(item){
+      if(y>250){doc.addPage();y=20;}
+      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(40,40,40);
+      doc.text(item.title,margin,y); y+=4;
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(70,70,70);
+      var lines=doc.splitTextToSize(item.body,W-margin*2);
+      doc.text(lines,margin,y); y+=lines.length*4+5;
+    });
+  }
+
+  // ── EXERCISE PROGRAM ────────────────────────────────────
+  if(y>230){doc.addPage();y=20;}
+  doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(0,100,60);
+  doc.text('3. Rehabilitasyon ve Egzersiz Programi',margin,y); y+=4;
+  doc.setDrawColor(0,100,60); doc.line(margin,y,W-margin,y); y+=3;
+  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+  doc.text('8 haftalik progresif program: 1-2. hafta aktivasyon, 3-4. hafta stabilizasyon, 5-8. hafta fonksiyonel guclendirme.',margin,y,{maxWidth:W-margin*2}); y+=7;
+
+  var prog=[]; var seen2={};
+  function add(arr){arr.forEach(function(e){if(!seen2[e.name]){seen2[e.name]=true;prog.push(e);}});}
+  if(r.headForward>2.5)  add(EX.headForward);
+  if(r.shoulderTilt>1.5) add(EX.shoulderTilt);
+  if(r.hipTilt>1.5)      add(EX.hipTilt);
+  if(r.lKnee<172||r.rKnee<172) add(EX.kneeValgus);
+  if(r.trunkLat>2)       add(EX.trunkLat);
+
+  if(prog.length>0){
+    doc.autoTable({
+      startY:y,
+      head:[['#','Egzersiz Adi','Set x Tekrar','Dinlenme','Hedef Kas Grubu','Seviye','Kaynak']],
+      body:prog.map(function(e,i){return[i+1,e.name,e.sets,e.rest,e.muscle,e.level,e.ref];}),
+      styles:{fontSize:7.5,cellPadding:2.2,textColor:[40,40,40],fillColor:[255,255,255],lineColor:[220,220,220],lineWidth:0.2},
+      headStyles:{fillColor:[0,100,60],textColor:[255,255,255],fontStyle:'bold',fontSize:7.5},
+      alternateRowStyles:{fillColor:[245,250,247]},
+      columnStyles:{0:{cellWidth:8,halign:'center'},1:{cellWidth:48},2:{cellWidth:20,halign:'center'},3:{cellWidth:18,halign:'center'},4:{cellWidth:42},5:{cellWidth:18,halign:'center'},6:{cellWidth:22}},
+      margin:{left:margin,right:margin}
+    });
+    y=doc.lastAutoTable.finalY+8;
+  }
+
+  // Technique notes
+  if(y>230){doc.addPage();y=20;}
+  doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(40,40,40);
+  doc.text('Teknik Notlar:',margin,y); y+=4;
+  prog.forEach(function(ex){
+    if(y>260){doc.addPage();y=20;}
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(40,40,40);
+    doc.text('- '+ex.name+':',margin,y); y+=4;
+    doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+    var lines=doc.splitTextToSize(ex.cue,W-margin*2-5);
+    doc.text(lines,margin+4,y); y+=lines.length*4+3;
+  });
+
+  // ── RECOMMENDATIONS ──────────────────────────────────────
+  if(y>230){doc.addPage();y=20;}
+  doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(0,100,60);
+  doc.text('4. Oneriler ve Takip',margin,y); y+=4;
+  doc.setDrawColor(0,100,60); doc.line(margin,y,W-margin,y); y+=5;
+  var recs=[
+    'Egzersiz programi haftada en az 3 gun uygulanmalidir.',
+    'Her 4 haftada bir postur olcumu tekrarlanmali, ilerleme takip edilmelidir.',
+    'Uzun sureli oturma pozisyonlari aralanmali, her 30 dakikada kisa molalar verilmelidir.',
+    issueList.length>0?'Bulgular klinik olarak anlamlidir. Fizyoterapist veya ortopedi uzmani ile degerlendirme onerilir.':'Koruyucu program kapsaminda genel mobilite ve core stabilizasyon calismalarina devam edilebilir.'
+  ];
+  doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
+  recs.forEach(function(rec){
+    if(y>265){doc.addPage();y=20;}
+    var lines=doc.splitTextToSize('• '+rec,W-margin*2);
+    doc.text(lines,margin,y); y+=lines.length*4.5+1;
+  });
+
+  // ── FOOTER ──────────────────────────────────────────────
+  var pages=doc.internal.getNumberOfPages();
+  for(var i=1;i<=pages;i++){
+    doc.setPage(i);
+    doc.setFillColor(240,245,240); doc.rect(0,doc.internal.pageSize.getHeight()-12,W,12,'F');
+    doc.setDrawColor(0,100,60); doc.setLineWidth(0.3); doc.line(margin,doc.internal.pageSize.getHeight()-12,W-margin,doc.internal.pageSize.getHeight()-12);
+    doc.setTextColor(100,120,100); doc.setFontSize(7); doc.setFont('helvetica','normal');
+    doc.text('PostureLab Pro - Bilimsel Postur Analiz Sistemi',margin,doc.internal.pageSize.getHeight()-6);
+    doc.text('Sayfa '+i+'/'+pages,W-margin,doc.internal.pageSize.getHeight()-6,{align:'right'});
+    doc.setTextColor(160,160,160); doc.setFontSize(6);
+    doc.text('Bu rapor bilgilendirme amaclidir. Klinik tani ve tedavi icin uzman hekim degerlendirmesi gereklidir.',W/2,doc.internal.pageSize.getHeight()-2,{align:'center'});
+  }
+  doc.save('PostureLab_Rapor_'+new Date().toLocaleDateString('tr-TR').replace(/\./g,'-')+'.pdf');
+}
+
+// INIT
+window.addEventListener('resize',setWrapH);
+document.addEventListener('DOMContentLoaded',setWrapH);
+</script>
+</body>
+</html>
