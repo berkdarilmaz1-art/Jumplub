@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>PostureLab Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Space+Mono&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root{
+  --bg:#07070f;--p1:#0e0e1c;--p2:#141428;--p3:#1a1a32;
+  --bd:#252545;--b2:#30305a;
+  --green:#00e676;--cyan:#00e5ff;--orange:#ff6d00;
+  --yellow:#ffd740;--red:#ff5252;--purple:#b06eff;
+  --text:#eeeeff;--muted:#55557a;
+  --fh:'Rajdhani',sans-serif;--fm:'Space Mono',monospace;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--fm);overflow:hidden;}
+
+/* APP */
+#app{height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+/* SCREENS */
+.screen{display:none;flex-direction:column;height:100%;overflow:hidden;}
+.screen.active{display:flex;}
+
+/* ── HOME ─────────────────── */
+#homeScreen{
+  background:radial-gradient(ellipse at 50% -20%, rgba(0,230,118,.06) 0%, transparent 60%), var(--bg);
+  align-items:center;justify-content:center;padding:24px;
+}
+.home-logo{font-family:var(--fh);font-size:38px;font-weight:700;letter-spacing:4px;text-align:center;margin-bottom:4px;}
+.home-logo span{color:var(--green);}
+.home-sub{font-size:9px;color:var(--muted);letter-spacing:3px;text-align:center;margin-bottom:32px;}
+.home-card{background:var(--p1);border:1px solid var(--bd);border-radius:16px;padding:24px;width:100%;max-width:380px;}
+.home-icon{font-size:48px;text-align:center;margin-bottom:12px;}
+.home-title{font-family:var(--fh);font-size:20px;font-weight:700;text-align:center;margin-bottom:10px;line-height:1.3;}
+.home-desc{font-size:11px;color:var(--muted);line-height:1.9;text-align:center;margin-bottom:18px;}
+.badges{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:20px;}
+.badge{font-size:9px;padding:3px 8px;border-radius:20px;background:rgba(0,229,255,.07);color:var(--cyan);border:1px solid rgba(0,229,255,.2);}
+.big-btn{width:100%;padding:16px;background:var(--green);color:#000;border:none;border-radius:10px;font-family:var(--fh);font-size:16px;font-weight:700;letter-spacing:2px;cursor:pointer;transition:all .15s;}
+.big-btn:active{transform:scale(.97);}
+.home-hint{font-size:10px;color:var(--muted);text-align:center;margin-top:12px;line-height:1.7;}
+
+/* ── CAMERA ─────────────────── */
+.cam-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:env(safe-area-inset-top,12px) 14px 10px;
+  background:rgba(7,7,15,.97);border-bottom:1px solid var(--bd);
+  flex-shrink:0;
+}
+.header-title{font-family:var(--fh);font-size:16px;font-weight:700;letter-spacing:3px;color:var(--cyan);}
+.back-btn{background:var(--p2);border:1px solid var(--bd);color:var(--text);border-radius:6px;padding:7px 12px;font-family:var(--fm);font-size:10px;cursor:pointer;}
+.status-row{display:flex;align-items:center;gap:6px;}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+.sdot.ok{background:var(--green);box-shadow:0 0 6px var(--green);}
+.sdot.warn{background:var(--yellow);box-shadow:0 0 6px var(--yellow);animation:blink 1s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.stext{font-size:9px;color:var(--muted);letter-spacing:1px;}
+
+.cam-wrap{
+  position:relative;background:#000;flex-shrink:0;
+  overflow:hidden;
+}
+.cam-wrap video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);}
+.cam-wrap canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);}
+
+/* Brackets */
+.br{position:absolute;z-index:5;width:22px;height:22px;pointer-events:none;}
+.br-tl{top:9px;left:9px;border-top:2px solid var(--green);border-left:2px solid var(--green);}
+.br-tr{top:9px;right:9px;border-top:2px solid var(--green);border-right:2px solid var(--green);}
+.br-bl{bottom:9px;left:9px;border-bottom:2px solid var(--green);border-left:2px solid var(--green);}
+.br-br{bottom:9px;right:9px;border-bottom:2px solid var(--green);border-right:2px solid var(--green);}
+
+/* Live HUD */
+.live-hud{
+  position:absolute;bottom:8px;left:0;right:0;z-index:6;
+  display:flex;gap:5px;justify-content:center;flex-wrap:wrap;padding:0 8px;
+}
+.hchip{
+  background:rgba(7,7,15,.88);border:1px solid var(--bd);
+  border-radius:5px;padding:3px 7px;
+  display:flex;flex-direction:column;align-items:center;gap:1px;
+}
+.hchip-lbl{font-size:7px;color:var(--muted);letter-spacing:1px;}
+.hchip-val{font-family:var(--fh);font-size:16px;font-weight:700;line-height:1;}
+
+/* Loading overlay */
+.loading-ov{
+  position:absolute;inset:0;z-index:20;
+  background:rgba(7,7,15,.9);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+}
+.loading-spinner{width:40px;height:40px;border:3px solid var(--bd);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-txt{font-size:11px;color:var(--green);letter-spacing:2px;}
+
+/* Flash */
+.flash-ov{position:absolute;inset:0;z-index:15;background:rgba(255,255,255,.6);pointer-events:none;opacity:0;transition:opacity .05s;}
+.flash-ov.show{opacity:1;}
+
+/* Instructions */
+.instructions{
+  padding:10px 14px;background:var(--p1);border-bottom:1px solid var(--bd);flex-shrink:0;
+}
+.instr-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:5px;font-size:10px;color:var(--muted);line-height:1.5;}
+.instr-row:last-child{margin-bottom:0;}
+.instr-num{background:var(--orange);color:#000;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}
+
+.cam-bottom{padding:12px 14px;background:var(--bg);flex-shrink:0;}
+.analyze-btn{
+  width:100%;padding:15px;background:var(--green);color:#000;
+  border:none;border-radius:10px;font-family:var(--fh);font-size:16px;
+  font-weight:700;letter-spacing:2px;cursor:pointer;transition:all .15s;
+}
+.analyze-btn:disabled{background:var(--bd);color:var(--muted);cursor:not-allowed;}
+.analyze-btn:active:not(:disabled){transform:scale(.97);}
+
+/* ── RESULT ─────────────────── */
+.result-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px 80px;}
+
+/* Score ring */
+.score-section{display:flex;align-items:center;gap:16px;background:var(--p1);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:14px;}
+.score-ring{position:relative;width:110px;height:110px;flex-shrink:0;}
+.score-ring svg{transform:rotate(-90deg);}
+.sr-track{fill:none;stroke:var(--p3);stroke-width:10;}
+.sr-fill{fill:none;stroke-width:10;stroke-linecap:round;stroke-dasharray:307.9;stroke-dashoffset:307.9;transition:stroke-dashoffset 1s ease,stroke .3s;}
+.score-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.score-num{font-family:var(--fh);font-size:36px;font-weight:700;line-height:1;}
+.score-grade{font-size:8px;color:var(--muted);letter-spacing:2px;margin-top:1px;}
+.score-right{flex:1;}
+.score-title{font-family:var(--fh);font-size:20px;font-weight:700;margin-bottom:6px;}
+.score-issues{font-size:11px;line-height:1.9;}
+
+/* Section title */
+.sec-title{font-size:9px;color:var(--muted);letter-spacing:3px;text-transform:uppercase;margin:16px 0 8px;}
+
+/* Metric row */
+.metric-card{background:var(--p1);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px;}
+.metric-left{flex:1;}
+.metric-name{font-size:12px;font-weight:600;margin-bottom:3px;}
+.metric-bar{height:5px;background:var(--p3);border-radius:3px;overflow:hidden;margin-bottom:3px;}
+.metric-bar-fill{height:100%;border-radius:3px;transition:width .6s ease;}
+.metric-ref{font-size:8px;color:var(--muted);}
+.metric-right{text-align:right;flex-shrink:0;}
+.metric-val{font-family:var(--fh);font-size:22px;font-weight:700;line-height:1;}
+.metric-unit{font-size:8px;color:var(--muted);}
+.metric-status{font-size:8px;padding:2px 6px;border-radius:3px;margin-top:3px;display:inline-block;}
+
+/* Diagnosis */
+.diag-card{background:var(--p1);border:1px solid var(--bd);border-radius:8px;padding:14px;margin-bottom:8px;}
+.diag-item{font-size:11px;color:#ccc;line-height:1.8;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--bd);}
+.diag-item:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none;}
+
+/* Exercise */
+.ex-card{background:var(--p1);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:10px;}
+.ex-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.ex-num{font-size:8px;color:var(--muted);letter-spacing:1px;}
+.ex-level{font-size:8px;padding:2px 7px;border-radius:3px;}
+.ex-name{font-family:var(--fh);font-size:17px;font-weight:700;margin-bottom:8px;}
+.ex-meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;}
+.ex-meta{background:var(--p2);border-radius:5px;padding:6px 8px;}
+.ex-meta-lbl{font-size:7px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;}
+.ex-meta-val{font-size:11px;font-weight:600;color:var(--text);}
+.ex-cue{background:#0a0a18;border-radius:6px;padding:9px 10px;border-left:2px solid var(--orange);}
+.ex-cue-lbl{font-size:8px;color:var(--orange);letter-spacing:1px;margin-bottom:3px;}
+.ex-cue-txt{font-size:11px;color:#ccc;line-height:1.6;}
+
+/* Week card */
+.week-card{background:var(--p1);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:8px;}
+.week-label{font-size:9px;color:var(--green);letter-spacing:2px;margin-bottom:3px;}
+.week-title{font-family:var(--fh);font-size:15px;font-weight:700;margin-bottom:2px;}
+.week-desc{font-size:10px;color:var(--muted);}
+
+/* Freq */
+.freq-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;}
+.freq-item{background:var(--p1);border:1px solid var(--bd);border-radius:8px;padding:10px;text-align:center;}
+.freq-zone{font-family:var(--fh);font-size:15px;font-weight:700;color:var(--green);margin-bottom:3px;}
+.freq-time{font-size:12px;color:var(--yellow);margin-bottom:2px;}
+.freq-desc{font-size:9px;color:var(--muted);}
+
+/* Bottom action bar */
+.action-bar{
+  position:fixed;bottom:0;left:0;right:0;
+  background:rgba(7,7,15,.97);border-top:1px solid var(--bd);
+  padding:10px 14px calc(env(safe-area-inset-bottom,6px)+6px);
+  display:flex;gap:8px;z-index:50;
+}
+.action-btn{flex:1;padding:12px;border:none;border-radius:8px;font-family:var(--fh);font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:all .15s;}
+.action-btn:active{transform:scale(.96);}
+.btn-primary{background:var(--green);color:#000;}
+.btn-secondary{background:var(--p2);border:1px solid var(--bd);color:var(--text);}
+.btn-pdf{background:rgba(0,229,255,.1);border:1px solid var(--cyan);color:var(--cyan);}
+
+/* Scrollbar */
+.result-scroll::-webkit-scrollbar{width:2px;}
+.result-scroll::-webkit-scrollbar-thumb{background:var(--bd);}
+
+/* No issues */
+.no-issues{text-align:center;padding:24px;color:var(--green);font-size:14px;line-height:1.8;}
+
+/* Tab switcher on result */
+.tab-row{display:flex;gap:0;border-bottom:1px solid var(--bd);margin-bottom:12px;flex-shrink:0;}
+.tab-btn{flex:1;border:none;background:none;color:var(--muted);font-family:var(--fm);font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:10px 4px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;}
+.tab-btn.on{color:var(--green);border-bottom-color:var(--green);}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ══ HOME ══════════════════════════════════════════ -->
+<div class="screen active" id="homeScreen">
+  <div class="home-logo">POSTURE<span>LAB</span></div>
+  <div class="home-sub">BİLİMSEL POSTÜR ANALİZİ</div>
+  <div class="home-card">
+    <div class="home-icon">🧍</div>
+    <div class="home-title">Yapay Zeka Destekli<br>Postür Değerlendirmesi</div>
+    <div class="home-desc">
+      MediaPipe Pose ile gerçek zamanlı iskelet analizi.<br>
+      7 bilimsel metrik · Klinik yorum · Kişisel egzersiz programı.
+    </div>
+    <div class="badges">
+      <span class="badge">Baş Duruşu</span>
+      <span class="badge">Omuz Simetrisi</span>
+      <span class="badge">Kalça Hizası</span>
+      <span class="badge">Diz Açısı</span>
+      <span class="badge">Gövde Eğimi</span>
+      <span class="badge">Sol/Sağ Fark</span>
+      <span class="badge">Genel Skor</span>
+    </div>
+    <button class="big-btn" onclick="goCamera()">📷 ANALİZE BAŞLA</button>
+    <div class="home-hint">Safari gerekli · Kameradan 2–3m uzaklaş · Tam vücut görünsün</div>
+  </div>
+</div>
+
+<!-- ══ CAMERA ════════════════════════════════════════ -->
+<div class="screen" id="cameraScreen">
+  <div class="cam-header">
+    <button class="back-btn" onclick="goHome()">← Geri</button>
+    <div class="header-title">CANLI ANALİZ</div>
+    <div class="status-row">
+      <div class="sdot" id="camDot"></div>
+      <span class="stext" id="camStatus">YÜKLENIYOR</span>
+    </div>
+  </div>
+
+  <div class="cam-wrap" id="camWrap">
+    <video id="camVideo" playsinline autoplay muted></video>
+    <canvas id="camCanvas"></canvas>
+    <div class="br br-tl"></div><div class="br br-tr"></div>
+    <div class="br br-bl"></div><div class="br br-br"></div>
+    <div class="live-hud" id="liveHud"></div>
+    <div class="flash-ov" id="flashOv"></div>
+    <div class="loading-ov" id="loadingOv">
+      <div class="loading-spinner"></div>
+      <div class="loading-txt">POSE MODELİ YÜKLENİYOR…</div>
+    </div>
+  </div>
+
+  <div class="instructions">
+    <div class="instr-row"><div class="instr-num">1</div><span>Kameradan <b style="color:var(--text)">2–3 metre</b> uzaklaş, baş ve ayak uçları çerçevede olsun</span></div>
+    <div class="instr-row"><div class="instr-num">2</div><span>Doğal dik duruş al, kollar yanda, <b style="color:var(--text)">3 saniye hareketsiz</b> dur</span></div>
+    <div class="instr-row"><div class="instr-num">3</div><span>Yeşil iskelet çizilince "Analiz Et" butonuna bas</span></div>
+  </div>
+
+  <div class="cam-bottom">
+    <button class="analyze-btn" id="analyzeBtn" onclick="analyze()" disabled>⏳ Pose Bekleniyor…</button>
+  </div>
+</div>
+
+<!-- ══ RESULT ════════════════════════════════════════ -->
+<div class="screen" id="resultScreen">
+  <div class="cam-header">
+    <button class="back-btn" onclick="goCamera()">← Tekrar</button>
+    <div class="header-title">POSTÜR RAPORU</div>
+    <button class="back-btn" onclick="goHome()">🏠</button>
+  </div>
+
+  <div class="tab-row">
+    <button class="tab-btn on" onclick="showTab('report',this)">📊 Rapor</button>
+    <button class="tab-btn" onclick="showTab('program',this)">💪 Program</button>
+  </div>
+
+  <!-- REPORT TAB -->
+  <div id="tab-report" class="result-scroll">
+    <!-- Score -->
+    <div class="score-section">
+      <div class="score-ring">
+        <svg width="110" height="110" viewBox="0 0 110 110">
+          <circle class="sr-track" cx="55" cy="55" r="49"/>
+          <circle class="sr-fill" id="srFill" cx="55" cy="55" r="49"/>
+        </svg>
+        <div class="score-center">
+          <div class="score-num" id="scoreNum">—</div>
+          <div class="score-grade" id="scoreGrade">—</div>
+        </div>
+      </div>
+      <div class="score-right">
+        <div class="score-title">Postür Skoru</div>
+        <div class="score-issues" id="scoreIssues"></div>
+      </div>
+    </div>
+
+    <div class="sec-title">ÖLÇÜM METRİKLERİ</div>
+    <div id="metricsArea"></div>
+
+    <div class="sec-title" id="diagTitle" style="display:none">KLİNİK YORUM</div>
+    <div class="diag-card" id="diagArea" style="display:none"></div>
+  </div>
+
+  <!-- PROGRAM TAB -->
+  <div id="tab-program" class="result-scroll" style="display:none">
+    <div class="sec-title">8 HAFTALIK PERİYODİZASYON</div>
+    <div class="week-card"><div class="week-label">1–2. HAFTA</div><div class="week-title">Farkındalık & Aktivasyon</div><div class="week-desc">Zayıf kasları uyandır, gergin kasları uzat. Düşük yoğunluk.</div></div>
+    <div class="week-card"><div class="week-label">3–4. HAFTA</div><div class="week-title">Stabilizasyon</div><div class="week-desc">Nötr pozisyon benimsenir, core stabilizasyon vurgulanır.</div></div>
+    <div class="week-card"><div class="week-label">5–8. HAFTA</div><div class="week-title">Güçlendirme & Transfer</div><div class="week-desc">Fonksiyonel hareketlere entegrasyon, yük artışı.</div></div>
+
+    <div class="sec-title">UYGULAMA SIKLIĞI</div>
+    <div class="freq-grid">
+      <div class="freq-item"><div class="freq-zone">Sabah</div><div class="freq-time">5–10 dk</div><div class="freq-desc">Germe & mobilite</div></div>
+      <div class="freq-item"><div class="freq-zone">Antrenman</div><div class="freq-time">20–30 dk</div><div class="freq-desc">Güçlendirme</div></div>
+      <div class="freq-item"><div class="freq-zone">Akşam</div><div class="freq-time">5 dk</div><div class="freq-desc">Nefes & relaks</div></div>
+    </div>
+
+    <div class="sec-title" id="exSectionTitle">EGZERSİZLER</div>
+    <div id="exArea"></div>
+  </div>
+
+  <div class="action-bar">
+    <button class="action-btn btn-secondary" onclick="goCamera()">📷 Tekrar Ölç</button>
+    <button class="action-btn btn-pdf" onclick="genPDF()">📄 PDF Rapor</button>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<script>
+'use strict';
+
+// ══ STATE ════════════════════════════════════════════════════
+let poseInst = null, camInst = null, camReady = false, poseReady = false;
+let lastLm = null, lastResult = null;
+
+// ══ NORMS ════════════════════════════════════════════════════
+const NORMS = {
+  headForward:  { label:'Baş İleriye Uzanma', unit:'cm', ideal:0, warn:2.5, bad:5,   ref:'Kendall 2005',  dir:'low' },
+  shoulderTilt: { label:'Omuz Eğim Farkı',    unit:'°',  ideal:0, warn:1.5, bad:3,   ref:'Sahrmann 2002', dir:'low' },
+  hipTilt:      { label:'Kalça Hizası Farkı', unit:'°',  ideal:0, warn:1.5, bad:3,   ref:'Page 2010',     dir:'low' },
+  lKnee:        { label:'Sol Diz Açısı',      unit:'°',  ideal:180,warn:172,bad:165, ref:'Powers 2010',   dir:'high' },
+  rKnee:        { label:'Sağ Diz Açısı',      unit:'°',  ideal:180,warn:172,bad:165, ref:'Powers 2010',   dir:'high' },
+  trunkLat:     { label:'Gövde Lateral Eğimi',unit:'°',  ideal:0, warn:2,   bad:4,   ref:'Comerford 2012',dir:'low' },
+  symmetry:     { label:'Sol/Sağ Simetri',    unit:'%',  ideal:100,warn:90, bad:80,  ref:'Zifchock 2008', dir:'high' },
+};
+
+// ══ EXERCISE DB ══════════════════════════════════════════════
+const EX = {
+  headForward: [
+    { name:'Derin Servikal Fleksör Aktivasyonu', sets:'3×10', rest:'60sn', level:'Başlangıç', muscle:'Derin boyun fleksörleri', cue:'Çene hafifçe içe çekilir, baş geriye kayar. Boyun kasları gevşek.', ref:'Jull 2008' },
+    { name:'Pektoral Germe (Kapı Germesi)',      sets:'3×30sn',rest:'30sn',level:'Başlangıç', muscle:'Pectoralis major/minor',  cue:'Kollar 90° açıyla kapı kasasına, göğüs öne-yukarı doğru açılır.',ref:'Kisner 2012' },
+    { name:'Scapular Retraksiyon (Band)',         sets:'3×15', rest:'60sn', level:'Orta',       muscle:'Orta trapez, romboidler',cue:'Kürek kemikleri birbirine yaklaşır, boyun ve omuz nötr kalır.',  ref:'Cools 2007' },
+  ],
+  shoulderTilt: [
+    { name:'Tek Taraflı Üst Trapez Germesi',     sets:'3×30sn',rest:'30sn',level:'Başlangıç', muscle:'Üst trapez (yüksek taraf)', cue:'Baş karşı yöne hafifçe eğilir, el kalçanın arkasında tutulur.',ref:'Sahrmann 2002' },
+    { name:'Serratus Anterior Aktivasyonu',       sets:'3×12', rest:'60sn', level:'Orta',       muscle:'Serratus anterior',         cue:'Wall push-up plus — son pozisyonda kürek kemiği öne "itilir".',ref:'Cools 2007' },
+    { name:'Alt Trapez Güçlendirme (Y Hareketi)',sets:'3×10', rest:'60sn', level:'İleri',       muscle:'Alt trapez',                 cue:'Yüzüstü pozisyon, kollar Y şeklinde yukarı kalkar, omuz kulağa yaklaşmasın.',ref:'Cools 2007' },
+  ],
+  hipTilt: [
+    { name:'İliopsoas Germesi (Koşucu Pozisyonu)',sets:'3×45sn',rest:'30sn',level:'Başlangıç', muscle:'İliopsoas',          cue:'Öndeki diz 90°, kalça öne-aşağı doğru baskı uygulanır.',ref:'Page 2010' },
+    { name:'Clamshell (Kalça Abdüksiyonu)',        sets:'3×15', rest:'60sn', level:'Başlangıç', muscle:'Gluteus medius',      cue:'Yan yatarak üst diz açılır, kalça geriye dönmez.',       ref:'Distefano 2009' },
+    { name:'Tek Bacak Romanian Deadlift',          sets:'3×8',  rest:'90sn', level:'İleri',      muscle:'Glut max, hamstrings',cue:'Gövde ve arka bacak düz çizgide ilerler, kalça nötr.',   ref:'Distefano 2009' },
+  ],
+  kneeValgus: [
+    { name:'Terminal Knee Extension (TKE)',  sets:'3×15',rest:'60sn',level:'Başlangıç', muscle:'Vastus medialis oblique', cue:'Band direnciyle son 15° diz ekstansiyonu — VMO kontraksiyonu hissedilmeli.',ref:'Powers 2010' },
+    { name:'Bant ile Squat (Dış Rotasyon)', sets:'3×10',rest:'90sn',level:'Orta',       muscle:'Glut med, dış rotatorlar',cue:'Diz, ayak 2. parmağı hizasında tutulur; içe kaçmaya izin verilmez.',    ref:'Powers 2010' },
+    { name:'Bulgarian Split Squat',          sets:'3×8', rest:'90sn',level:'İleri',      muscle:'Quad, glut max, hip stabilizörler',cue:'Arka ayak yüksekte, ön diz dizamet hizası geçmez.',ref:'Distefano 2009' },
+  ],
+  trunkLat: [
+    { name:'Side Plank',              sets:'3×25sn',rest:'60sn',level:'Başlangıç', muscle:'QL, obliques',               cue:'Kalça zemine düşmez, gövde yan çizgide düz tutulur.',  ref:'McGill 2010' },
+    { name:'Paloff Press',            sets:'3×10', rest:'60sn', level:'Orta',       muscle:'Transversus abdominis, obliques',cue:'Göbek içe çekilir, omurgada rotasyon engellenir.',  ref:'McGill 2010' },
+    { name:'Tek El Farmer\'s Carry', sets:'3×20m',rest:'90sn', level:'İleri',      muscle:'QL, lat, obliques',           cue:'Omuz seviyeleri eşit, adım kontrollü ve güçlü.',     ref:'Comerford 2012' },
+  ],
+};
+
+// ══ SCREEN NAVIGATION ════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function goHome() {
+  if (camInst) { try { camInst.stop(); } catch(e){} camInst = null; }
+  camReady = false; poseReady = false; lastLm = null;
+  showScreen('homeScreen');
+}
+
+function goCamera() {
+  showScreen('cameraScreen');
+  if (!camReady) initCamera();
+}
+
+function goResult() { showScreen('resultScreen'); }
+
+// ══ TAB ══════════════════════════════════════════════════════
+function showTab(id, el) {
+  document.getElementById('tab-report').style.display = 'none';
+  document.getElementById('tab-program').style.display = 'none';
+  document.getElementById('tab-' + id).style.display = 'block';
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('on'));
+  el.classList.add('on');
+}
+
+// ══ CAMERA ═══════════════════════════════════════════════════
+async function initCamera() {
+  document.getElementById('loadingOv').style.display = 'flex';
+  setCamUI('warn', 'YÜKLENIYOR');
+
+  try {
+    // Set camera wrap height
+    const wrap = document.getElementById('camWrap');
+    wrap.style.height = Math.round(window.innerWidth * 0.75) + 'px';
+
+    poseInst = new Pose({
+      locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`
+    });
+    poseInst.setOptions({
+      modelComplexity: 1,
+      smoothLandmarks: true,
+      minDetectionConfidence: 0.55,
+      minTrackingConfidence: 0.5
+    });
+    poseInst.onResults(onPoseResults);
+
+    camInst = new Camera(document.getElementById('camVideo'), {
+      onFrame: async () => {
+        if (poseInst) await poseInst.send({ image: document.getElementById('camVideo') });
+      },
+      width: 640, height: 480
+    });
+    await camInst.start();
+    camReady = true;
+    setCamUI('ok', 'KAMERA HAZIR');
+    document.getElementById('loadingOv').style.display = 'none';
+
+  } catch(e) {
+    document.getElementById('loadingOv').style.display = 'none';
+    setCamUI('', 'HATA');
+    alert('Kamera açılamadı.\n\n• Safari kullandığınızdan emin olun\n• Ayarlar → Safari → Kamera → İzin Ver\n• Sayfayı yenileyin');
+  }
+}
+
+function setCamUI(dotClass, text) {
+  const dot = document.getElementById('camDot');
+  dot.className = 'sdot' + (dotClass ? ' ' + dotClass : '');
+  document.getElementById('camStatus').textContent = text;
+}
+
+// ══ POSE RESULTS ═════════════════════════════════════════════
+function onPoseResults(res) {
+  if (!res.poseLandmarks) return;
+  const lm = res.poseLandmarks;
+  lastLm = lm;
+
+  if (!poseReady) {
+    poseReady = true;
+    setCamUI('ok', 'POSE HAZIR');
+    const btn = document.getElementById('analyzeBtn');
+    btn.disabled = false;
+    btn.textContent = '📸 ANALİZ ET';
+  }
+
+  // Draw on canvas
+  const cvs = document.getElementById('camCanvas');
+  const W = cvs.width = res.image.width;
+  const H = cvs.height = res.image.height;
+  const ctx = cvs.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  if (window.drawConnectors && window.POSE_CONNECTIONS)
+    drawConnectors(ctx, lm, POSE_CONNECTIONS, { color: 'rgba(0,230,118,.55)', lineWidth: 2 });
+  if (window.drawLandmarks)
+    drawLandmarks(ctx, lm, { color: '#00e5ff', fillColor: 'rgba(0,229,255,.35)', radius: 4, lineWidth: 1.5 });
+
+  // Highlight key joints
+  [11,12,23,24,25,26,27,28].forEach(i => {
+    if (!lm[i]) return;
+    ctx.beginPath(); ctx.arc(lm[i].x*W, lm[i].y*H, 7, 0, Math.PI*2);
+    ctx.strokeStyle='#ff6d00'; ctx.lineWidth=2.5; ctx.stroke();
+  });
+
+  // Ground line at ankle level
+  const lA = lm[27], rA = lm[28];
+  if (lA && rA) {
+    const gy = ((lA.y + rA.y) / 2) * H;
+    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy);
+    ctx.strokeStyle='rgba(0,230,118,.3)'; ctx.lineWidth=1.5;
+    ctx.setLineDash([6,5]); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // Live HUD
+  const a = calcPosture(lm);
+  const c1 = statusColor(a.lKnee, NORMS.lKnee);
+  const c2 = statusColor(a.rKnee, NORMS.rKnee);
+  const c3 = statusColor(a.symmetry, NORMS.symmetry);
+  document.getElementById('liveHud').innerHTML =
+    hchip('L-DİZ', a.lKnee+'°', c1) +
+    hchip('R-DİZ', a.rKnee+'°', c2) +
+    hchip('SİMETRİ', a.symmetry+'%', c3) +
+    hchip('SKOR', a.score, scoreColor(a.score));
+}
+
+function hchip(lbl, val, color) {
+  return `<div class="hchip"><span class="hchip-lbl">${lbl}</span><span class="hchip-val" style="color:${color}">${val}</span></div>`;
+}
+
+// ══ POSTURE CALCULATION ═══════════════════════════════════════
+function ang(A, B, C) {
+  if (!A||!B||!C) return 0;
+  const ax=A.x-B.x, ay=A.y-B.y, bx=C.x-B.x, by=C.y-B.y;
+  const dot=ax*bx+ay*by;
+  const mag=Math.sqrt(ax*ax+ay*ay)*Math.sqrt(bx*bx+by*by);
+  if (!mag) return 0;
+  return Math.round(Math.acos(Math.max(-1,Math.min(1,dot/mag)))*180/Math.PI);
+}
+
+function calcPosture(lm) {
+  const lEar=lm[7], rEar=lm[8];
+  const lSh=lm[11], rSh=lm[12];
+  const lHip=lm[23], rHip=lm[24];
+  const lKnee=lm[25], rKnee=lm[26];
+  const lAnk=lm[27], rAnk=lm[28];
+
+  const headForward  = lEar&&lSh ? Math.round(Math.abs(lEar.x-lSh.x)*100) : 0;
+  const shoulderTilt = lSh&&rSh  ? Math.round(Math.abs(lSh.y-rSh.y)*1000)/10 : 0;
+  const hipTilt      = lHip&&rHip? Math.round(Math.abs(lHip.y-rHip.y)*1000)/10 : 0;
+  const lKneeA = ang(lHip, lKnee, lAnk);
+  const rKneeA = ang(rHip, rKnee, rAnk);
+  const trunkMidSh = lSh&&rSh ? (lSh.x+rSh.x)/2 : 0.5;
+  const trunkMidHip= lHip&&rHip? (lHip.x+rHip.x)/2 : 0.5;
+  const trunkLat   = Math.round(Math.abs(trunkMidSh-trunkMidHip)*100);
+  const kneeSymDiff= Math.abs(lKneeA-rKneeA);
+  const symRaw     = 100 - kneeSymDiff*2 - shoulderTilt*3 - hipTilt*3;
+  const symmetry   = Math.max(0, Math.min(100, Math.round(symRaw)));
+
+  let score = 100;
+  if (headForward>2.5)  score -= (headForward-2.5)*4;
+  if (shoulderTilt>1.5) score -= (shoulderTilt-1.5)*5;
+  if (hipTilt>1.5)      score -= (hipTilt-1.5)*5;
+  if (lKneeA<172)       score -= (172-lKneeA)*0.8;
+  if (rKneeA<172)       score -= (172-rKneeA)*0.8;
+  if (trunkLat>2)       score -= (trunkLat-2)*3;
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  return { headForward, shoulderTilt, hipTilt, lKnee:lKneeA, rKnee:rKneeA, trunkLat, symmetry, score };
+}
+
+// ══ ANALYZE ═══════════════════════════════════════════════════
+function analyze() {
+  if (!lastLm) { alert('Vücut tespit edilemedi. Biraz geri çekil.'); return; }
+
+  // Flash
+  const fl = document.getElementById('flashOv');
+  fl.classList.add('show');
+  setTimeout(() => fl.classList.remove('show'), 250);
+
+  lastResult = calcPosture(lastLm);
+  renderResult(lastResult);
+  goResult();
+}
+
+// ══ RENDER RESULT ═════════════════════════════════════════════
+function renderResult(r) {
+  const color = scoreColor(r.score);
+  const grade = r.score>=85?'MÜKEMMEL':r.score>=70?'İYİ':r.score>=55?'ORTA':'GELİŞTİR';
+
+  // Score ring
+  const circ = 307.9;
+  document.getElementById('srFill').style.strokeDashoffset = circ - (r.score/100)*circ;
+  document.getElementById('srFill').style.stroke = color;
+  document.getElementById('scoreNum').textContent = r.score;
+  document.getElementById('scoreNum').style.color = color;
+  document.getElementById('scoreGrade').textContent = grade;
+
+  // Issues
+  const issues = [
+    r.headForward>2.5   && '⚠ Baş ileriye uzanma',
+    r.shoulderTilt>1.5  && '⚠ Omuz asimetrisi',
+    r.hipTilt>1.5       && '⚠ Kalça hizası bozukluğu',
+    (r.lKnee<172||r.rKnee<172) && '⚠ Diz valgus',
+    r.trunkLat>2        && '⚠ Gövde lateral eğimi',
+  ].filter(Boolean);
+
+  document.getElementById('scoreIssues').innerHTML = issues.length === 0
+    ? '<span style="color:var(--green);font-size:12px;">✓ Tüm metrikler normal sınırlar içinde!</span>'
+    : `<div style="font-size:11px;line-height:1.9;color:#ccc;">${issues.join('<br>')}</div>`;
+
+  // Metrics
+  const metKeys = [
+    {k:'headForward', v:r.headForward},
+    {k:'shoulderTilt',v:r.shoulderTilt},
+    {k:'hipTilt',     v:r.hipTilt},
+    {k:'lKnee',       v:r.lKnee},
+    {k:'rKnee',       v:r.rKnee},
+    {k:'trunkLat',    v:r.trunkLat},
+    {k:'symmetry',    v:r.symmetry},
+  ];
+  document.getElementById('metricsArea').innerHTML = metKeys.map(({k,v}) => {
+    const n = NORMS[k];
+    const st = getStatus(v, n);
+    const c = statusColor(v, n);
+    const pct = n.dir==='low'
+      ? Math.max(0, 100-Math.min((v/(n.bad*1.5))*100, 100))
+      : Math.min(100, (v/n.ideal)*100);
+    return `<div class="metric-card">
+      <div class="metric-left">
+        <div class="metric-name">${n.label}</div>
+        <div class="metric-bar"><div class="metric-bar-fill" style="width:${pct}%;background:${c};"></div></div>
+        <div class="metric-ref">Kaynak: ${n.ref}</div>
+      </div>
+      <div class="metric-right">
+        <div class="metric-val" style="color:${c}">${v}</div>
+        <div class="metric-unit">${n.unit}</div>
+        <div class="metric-status" style="background:${c}22;color:${c};">${st.toUpperCase()}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Diagnosis
+  const diags = [
+    r.headForward>2.5   && `<div class="diag-item"><b style="color:var(--yellow)">Baş İleriye Uzanma:</b> Servikal lordoz artışı ve boyun fleksörü zayıflığı ile ilişkili. Kronik baş ağrısı ve boyun ağrısı riski artmaktadır. Uzun süreli ekran kullanımı başlıca risk faktörüdür (Kendall 2005).</div>`,
+    r.shoulderTilt>1.5  && `<div class="diag-item"><b style="color:var(--yellow)">Omuz Asimetrisi:</b> Üst çapraz sendrom düşündürür. Pektoral kaslar kısalmış, romboidler ve orta trapez zayıflamış olabilir. Rotator cuff yaralanması riskini artırır (Sahrmann 2002).</div>`,
+    r.hipTilt>1.5       && `<div class="diag-item"><b style="color:var(--yellow)">Kalça Hizası Bozukluğu:</b> Alt çapraz sendrom ile uyumlu. İliopsoas kısalığı ve gluteus medius zayıflığı tipik bulgulardır. Bel ağrısı ve IT band sendromu ile ilişkili olabilir (Page 2010).</div>`,
+    (r.lKnee<172||r.rKnee<172) && `<div class="diag-item"><b style="color:var(--red)">Diz Valgus:</b> Femoral iç rotasyon ve ayak pronasyon zinciri görülebilir. Patellofemoral ağrı sendromu riski yüksektir. ACL yaralanma riskiyle ilişkilendirilmiştir (Powers 2010).</div>`,
+    r.trunkLat>2        && `<div class="diag-item"><b style="color:var(--yellow)">Gövde Lateral Eğimi:</b> QL asimetrisi veya tek taraflı kalça abduktör zayıflığı. Trendelenburg belirtisiyle ilişkili olabilir (Comerford 2012).</div>`,
+  ].filter(Boolean);
+
+  if (diags.length > 0) {
+    document.getElementById('diagTitle').style.display = 'block';
+    document.getElementById('diagArea').style.display = 'block';
+    document.getElementById('diagArea').innerHTML = diags.join('');
+  } else {
+    document.getElementById('diagTitle').style.display = 'none';
+    document.getElementById('diagArea').style.display = 'none';
+  }
+
+  // Build exercise program
+  renderProgram(r);
+}
+
+// ══ EXERCISE PROGRAM ══════════════════════════════════════════
+function renderProgram(r) {
+  const prog = [];
+  const seen = new Set();
+  const add = (arr) => arr.forEach(e => { if (!seen.has(e.name)) { seen.add(e.name); prog.push(e); }});
+
+  if (r.headForward>2.5)  add(EX.headForward);
+  if (r.shoulderTilt>1.5) add(EX.shoulderTilt);
+  if (r.hipTilt>1.5)      add(EX.hipTilt);
+  if (r.lKnee<172||r.rKnee<172) add(EX.kneeValgus);
+  if (r.trunkLat>2)       add(EX.trunkLat);
+
+  document.getElementById('exSectionTitle').textContent = `EGZERSİZLER (${prog.length} ADET)`;
+
+  if (prog.length === 0) {
+    document.getElementById('exArea').innerHTML =
+      '<div class="no-issues">🎉 Postürün mükemmel!<br>Koruyucu program olarak genel mobilite ve core stabilizasyon çalışması yeterli.</div>';
+    return;
+  }
+
+  const levelColor = l => l==='Başlangıç'?'rgba(0,230,118,.1)':l==='Orta'?'rgba(255,215,64,.1)':'rgba(255,82,82,.1)';
+  const levelText  = l => l==='Başlangıç'?'var(--green)':l==='Orta'?'var(--yellow)':'var(--red)';
+
+  document.getElementById('exArea').innerHTML = prog.map((ex, i) => `
+    <div class="ex-card">
+      <div class="ex-header">
+        <span class="ex-num">${i+1}/${prog.length}</span>
+        <span class="ex-level" style="background:${levelColor(ex.level)};color:${levelText(ex.level)};">${ex.level.toUpperCase()}</span>
+      </div>
+      <div class="ex-name">${ex.name}</div>
+      <div class="ex-meta-grid">
+        <div class="ex-meta"><div class="ex-meta-lbl">Set×Tekrar</div><div class="ex-meta-val">${ex.sets}</div></div>
+        <div class="ex-meta"><div class="ex-meta-lbl">Dinlenme</div><div class="ex-meta-val">${ex.rest}</div></div>
+        <div class="ex-meta"><div class="ex-meta-lbl">Kas Grubu</div><div class="ex-meta-val">${ex.muscle}</div></div>
+        <div class="ex-meta"><div class="ex-meta-lbl">Kaynak</div><div class="ex-meta-val">${ex.ref}</div></div>
+      </div>
+      <div class="ex-cue">
+        <div class="ex-cue-lbl">TEKNİK CUE</div>
+        <div class="ex-cue-txt">${ex.cue}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ══ PDF REPORT ════════════════════════════════════════════════
+function genPDF() {
+  if (!lastResult) return;
+  const r = lastResult;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const W = doc.internal.pageSize.getWidth();
+  let y = 18;
+
+  // Header
+  doc.setFillColor(7,7,15); doc.rect(0,0,W,36,'F');
+  doc.setFillColor(0,230,118); doc.rect(0,0,3,36,'F');
+  doc.setTextColor(0,230,118); doc.setFontSize(20); doc.setFont('helvetica','bold');
+  doc.text('POSTURELAB PRO',8,14);
+  doc.setTextColor(0,229,255); doc.setFontSize(10);
+  doc.text('BİLİMSEL POSTÜR ANALİZ RAPORU',8,24);
+  doc.setTextColor(100,100,100); doc.setFontSize(7);
+  doc.text(new Date().toLocaleString('tr-TR'),W-8,24,{align:'right'});
+  y=44;
+
+  // Score
+  const grade = r.score>=85?'MÜKEMMEL':r.score>=70?'İYİ':r.score>=55?'ORTA':'GELİŞTİR';
+  doc.setFillColor(20,20,40); doc.rect(0,y-4,W,18,'F');
+  doc.setTextColor(0,230,118); doc.setFontSize(28); doc.setFont('helvetica','bold');
+  doc.text(String(r.score),12,y+8);
+  doc.setTextColor(200,200,220); doc.setFontSize(14);
+  doc.text('/ 100 — '+grade,30,y+8);
+  y+=24;
+
+  // Metrics table
+  doc.setTextColor(0,230,118); doc.setFontSize(11); doc.setFont('helvetica','bold');
+  doc.text('ÖLÇÜM METRİKLERİ',8,y); y+=6;
+  doc.autoTable({
+    startY:y,
+    head:[['Metrik','Değer','Birim','Durum','Kaynak']],
+    body:[
+      ['Baş İleriye Uzanma', r.headForward, 'cm', getStatus(r.headForward,NORMS.headForward).toUpperCase(), 'Kendall 2005'],
+      ['Omuz Eğim Farkı', r.shoulderTilt, '°', getStatus(r.shoulderTilt,NORMS.shoulderTilt).toUpperCase(), 'Sahrmann 2002'],
+      ['Kalça Hizası Farkı', r.hipTilt, '°', getStatus(r.hipTilt,NORMS.hipTilt).toUpperCase(), 'Page 2010'],
+      ['Sol Diz Açısı', r.lKnee, '°', getStatus(r.lKnee,NORMS.lKnee).toUpperCase(), 'Powers 2010'],
+      ['Sağ Diz Açısı', r.rKnee, '°', getStatus(r.rKnee,NORMS.rKnee).toUpperCase(), 'Powers 2010'],
+      ['Gövde Lateral Eğimi', r.trunkLat, '°', getStatus(r.trunkLat,NORMS.trunkLat).toUpperCase(), 'Comerford 2012'],
+      ['Sol/Sağ Simetri', r.symmetry, '%', getStatus(r.symmetry,NORMS.symmetry).toUpperCase(), 'Zifchock 2008'],
+    ],
+    styles:{fillColor:[14,14,28],textColor:[200,200,220],fontSize:8},
+    headStyles:{fillColor:[0,50,30],textColor:[0,230,118]},
+    columnStyles:{3:{fontStyle:'bold'}},
+    margin:{left:8,right:8}
+  });
+  y = doc.lastAutoTable.finalY+10;
+
+  // Diagnosis
+  if (y>220){doc.addPage();y=20;}
+  doc.setTextColor(0,230,118); doc.setFontSize(11); doc.setFont('helvetica','bold');
+  doc.text('KLİNİK YORUM',8,y); y+=6;
+
+  const diags = [
+    r.headForward>2.5   && ['Baş İleriye Uzanma','Servikal lordoz artışı ve boyun fleksörü zayıflığı. Kronik baş ağrısı riski (Kendall 2005).'],
+    r.shoulderTilt>1.5  && ['Omuz Asimetrisi','Üst çapraz sendrom düşündürür. Pektoral kısalık ve romboid zayıflığı (Sahrmann 2002).'],
+    r.hipTilt>1.5       && ['Kalça Hizası','Alt çapraz sendrom. İliopsoas kısalığı ve glut med zayıflığı (Page 2010).'],
+    (r.lKnee<172||r.rKnee<172) && ['Diz Valgus','Patellofemoral ağrı riski. Femoral iç rotasyon zinciri (Powers 2010).'],
+    r.trunkLat>2        && ['Gövde Eğimi','QL asimetrisi veya tek taraflı abduktör zayıflığı (Comerford 2012).'],
+  ].filter(Boolean);
+
+  if (diags.length === 0) {
+    doc.setTextColor(0,230,118); doc.setFontSize(10); doc.setFont('helvetica','normal');
+    doc.text('Tüm metrikler normal sınırlar içinde. Mükemmel postür!',8,y); y+=8;
+  } else {
+    diags.forEach(([title,desc]) => {
+      doc.setTextColor(255,215,64); doc.setFontSize(9); doc.setFont('helvetica','bold');
+      doc.text(title+':',8,y); y+=5;
+      doc.setTextColor(190,190,210); doc.setFontSize(8); doc.setFont('helvetica','normal');
+      const split = doc.splitTextToSize(desc, W-16);
+      doc.text(split,8,y); y+=split.length*5+3;
+    });
+  }
+
+  // Exercise program
+  if (y>220){doc.addPage();y=20;}
+  doc.setTextColor(0,230,118); doc.setFontSize(11); doc.setFont('helvetica','bold');
+  doc.text('EGZERSİZ PROGRAMI',8,y); y+=6;
+
+  const prog = [];
+  const seen = new Set();
+  const add = arr => arr.forEach(e => { if(!seen.has(e.name)){seen.add(e.name);prog.push(e);}});
+  if(r.headForward>2.5) add(EX.headForward);
+  if(r.shoulderTilt>1.5) add(EX.shoulderTilt);
+  if(r.hipTilt>1.5) add(EX.hipTilt);
+  if(r.lKnee<172||r.rKnee<172) add(EX.kneeValgus);
+  if(r.trunkLat>2) add(EX.trunkLat);
+
+  if (prog.length > 0) {
+    doc.autoTable({
+      startY:y,
+      head:[['#','Egzersiz','Set×Tekrar','Dinlenme','Kas Grubu','Seviye']],
+      body:prog.map((e,i)=>[i+1,e.name,e.sets,e.rest,e.muscle,e.level]),
+      styles:{fillColor:[14,14,28],textColor:[200,200,220],fontSize:7},
+      headStyles:{fillColor:[0,50,30],textColor:[0,230,118]},
+      margin:{left:8,right:8}
+    });
+    y=doc.lastAutoTable.finalY+10;
+  }
+
+  // Footer
+  const pages = doc.internal.getNumberOfPages();
+  for(let i=1;i<=pages;i++){
+    doc.setPage(i);
+    doc.setFillColor(0,230,118); doc.rect(0,doc.internal.pageSize.getHeight()-8,W,8,'F');
+    doc.setTextColor(0); doc.setFontSize(6);
+    doc.text(`PostureLab Pro · ${new Date().toLocaleDateString('tr-TR')} · Sayfa ${i}/${pages}`, W/2, doc.internal.pageSize.getHeight()-2, {align:'center'});
+  }
+
+  doc.save('PostureLab_Rapor_'+new Date().toLocaleDateString('tr-TR').replace(/\./g,'-')+'.pdf');
+  toast('✓ PDF raporu indirildi!');
+}
+
+// ══ HELPERS ═══════════════════════════════════════════════════
+function getStatus(v, n) {
+  if (n.dir==='low')  return v<=n.ideal?'normal':v<=n.warn?'dikkat':'sorunlu';
+  return v>=n.ideal?'normal':v>=n.warn?'dikkat':'sorunlu';
+}
+function statusColor(v, n) {
+  const s=getStatus(v,n);
+  return s==='normal'?'var(--green)':s==='dikkat'?'var(--yellow)':'var(--red)';
+}
+function scoreColor(s) {
+  return s>=85?'var(--green)':s>=65?'var(--yellow)':'var(--red)';
+}
+
+function toast(msg) {
+  let t = document.getElementById('_toast');
+  if (!t) { t=document.createElement('div'); t.id='_toast'; t.style.cssText='position:fixed;bottom:80px;right:14px;z-index:999;background:#0e0e1c;border:1px solid var(--green);border-radius:8px;padding:10px 16px;font-size:10px;letter-spacing:1px;color:var(--green);opacity:0;transition:all .3s;pointer-events:none;'; document.body.appendChild(t); }
+  t.textContent=msg; t.style.opacity='1'; t.style.transform='translateY(0)';
+  setTimeout(()=>{t.style.opacity='0';},2500);
+}
+
+// ══ INIT ══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  // Set camera wrap height dynamically
+  const setH = () => {
+    const wrap = document.getElementById('camWrap');
+    if (wrap) wrap.style.height = Math.round(window.innerWidth*0.75)+'px';
+  };
+  setH();
+  window.addEventListener('resize', setH);
+});
+</script>
+</body>
+</html>
